@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auth_gateway_serverkit"
-version = "0.0.8"
+version = "0.0.9"
 authors = [
     { name = "Echo298327", email = "shalomber17@gmail.com" }
 ]
@@ -32,5 +32,5 @@ dependencies = [
 Homepage = "https://github.com/Echo298327/auth-gateway-serverkit"
 
 [tool.setuptools]
-packages = ["auth_gateway_serverkit"]
+packages = ["auth_gateway_serverkit", "auth_gateway_serverkit.middleware"]
 package-dir = {"" = "src"}
