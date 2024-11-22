@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auth_gateway_serverkit"
-version = "0.0.6"
+version = "0.0.7"
 authors = [
     { name = "Echo298327", email = "shalomber17@gmail.com" }
 ]
@@ -21,7 +21,8 @@ dependencies = [
     'fastapi==0.115.5',
     'httpx==0.27.2',
     'pydantic==2.9.2',
-    'pydantic_settings==2.6.1'
+    'pydantic_settings==2.6.1',
+    'pydantic[email]',
 ]
 
 [project.urls]
