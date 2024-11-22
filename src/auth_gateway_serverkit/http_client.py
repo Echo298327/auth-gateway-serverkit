@@ -2,7 +2,7 @@ import httpx
 import json
 from fastapi import Request
 from typing import Optional
-from logger import init_logger
+from .logger import init_logger
 from urllib.parse import urlparse, urlunparse
 
 
