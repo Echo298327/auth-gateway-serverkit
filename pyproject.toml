@@ -10,15 +10,14 @@ authors = [
 ]
 description = "A brief description of your package."
 readme = "README.md"
-readme-content-type = "text/markdown"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
-dependencies = []  # Add any dependencies your project requires
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/Echo298327/auth-gateway-serverkit"
