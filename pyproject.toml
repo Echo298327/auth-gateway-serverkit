@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auth_gateway_serverkit"
-version = "0.0.7"
+version = "0.0.8"
 authors = [
     { name = "Echo298327", email = "shalomber17@gmail.com" }
 ]
-description = "A brief description of your package."
+description = "serverkit for auth-gateway-fastapi-keycloak repository"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
@@ -23,6 +23,9 @@ dependencies = [
     'pydantic==2.9.2',
     'pydantic_settings==2.6.1',
     'pydantic[email]',
+    'python-keycloak==3.9.1',
+    'PyJWT==2.6.0',
+    'python-dotenv==1.0.1',
 ]
 
 [project.urls]
