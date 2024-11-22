@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "build"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "auth_gateway_serverkit"
 version = "0.0.1"
@@ -6,6 +10,7 @@ authors = [
 ]
 description = "A brief description of your package."
 readme = "README.md"
+readme-content-type = "text/markdown"
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -13,5 +18,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+dependencies = []  # Add any dependencies your project requires
+
 [project.urls]
 Homepage = "https://github.com/Echo298327/auth-gateway-serverkit"
+
+[tool.setuptools]
+packages = ["auth_gateway_serverkit"]
+package-dir = {"" = "src"}
