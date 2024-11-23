@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auth_gateway_serverkit"
-version = "0.0.10"
+version = "0.0.11"
 authors = [
     { name = "Echo298327", email = "shalomber17@gmail.com" }
 ]
@@ -26,6 +26,7 @@ dependencies = [
     'python-keycloak==3.9.1',
     'PyJWT==2.6.0',
     'python-dotenv==1.0.1',
+    'python-multipart'
 ]
 
 [project.urls]
