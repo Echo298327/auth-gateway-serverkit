@@ -7,10 +7,12 @@ from .config import settings as auth_settings
 from .schemas import UserPayload
 import requests
 import jwt
+from ..logger import init_logger
 
 # Set up OAuth2 (the tokenUrl can be set later when settings are initialized)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='None')
 
+looger = init_logger("auth")
 
 def get_keycloak_openid():
     keycloak_openid = KeycloakOpenID(
@@ -103,8 +105,9 @@ def check_entitlement(token: str, resource_id: str, scope: str = None) -> bool:
         'audience': auth_settings.CLIENT_ID,
         'permission': f"{resource_id}#{scope}" if scope else resource_id,
     }
-
+    looger.info(f"check_entitlement: {data}")
     response = requests.post(token_url, data=data, headers=headers, verify=True)
+    looger.info(response.json())
 
     if response.status_code == 200 and 'access_token' in response.json():
         return True
