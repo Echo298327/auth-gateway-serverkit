@@ -34,7 +34,7 @@ async def get_idp_public_key():
 async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         key = await get_idp_public_key()
-        audience = 'account'
+        audience = auth_settings.CLIENT_ID
         decoded_token = jwt.decode(
             token,
             key=key,
