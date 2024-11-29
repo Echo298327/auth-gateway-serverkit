@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     SERVER_URL: str = os.getenv("SERVER_URL")
     REALM: str = os.getenv("REALM")
     CLIENT_ID: str = os.getenv("CLIENT_ID")
+    CLIENT_SECRET: str = os.getenv("CLIENT_SECRET")
     AUTHORIZATION_URL: str = os.getenv("AUTHORIZATION_URL")
     TOKEN_URL: str = os.getenv("TOKEN_URL")
 
