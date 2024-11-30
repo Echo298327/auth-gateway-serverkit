@@ -11,8 +11,8 @@ from ..logger import init_logger
 
 # Set up OAuth2 (the tokenUrl can be set later when settings are initialized)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='None')
+looger = init_logger("serverkit.middleware.auth")
 
-looger = init_logger("auth")
 
 def get_keycloak_openid():
     keycloak_openid = KeycloakOpenID(
@@ -92,7 +92,7 @@ async def check_entitlement(token: str, resource_id: str) -> bool:
     :param resource_id: Resource to check access for (e.g., API endpoint).
     :return: True if access is granted, False otherwise.
     """
-    token_url = f"http://keycloak:9000/{auth_settings.REALM}/protocol/openid-connect/token"
+    token_url = f"{auth_settings.SERVER_URL}/{auth_settings.REALM}/protocol/openid-connect/token"
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': f'Bearer {token}',
