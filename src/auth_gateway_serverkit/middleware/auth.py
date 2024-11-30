@@ -84,7 +84,7 @@ async def get_user_info(token: str = Depends(oauth2_scheme)) -> UserPayload:
         )
 
 
-def check_entitlement(token: str, resource_id: str) -> bool:
+async def check_entitlement(token: str, resource_id: str) -> bool:
     """
     Check if the token has access to a specific resource and scope in Keycloak.
 
@@ -133,7 +133,8 @@ def auth(get_user_by_uid: Callable[[str], Any]):
             resource = service + "/" + action
 
             # Verify that the user has the permission to execute the request
-            if not check_entitlement(token, resource):
+            is_entitled = await check_entitlement(token, resource)
+            if not is_entitled:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
             user = await get_user_by_uid(key_user.id)
