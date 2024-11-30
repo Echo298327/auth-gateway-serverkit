@@ -84,13 +84,12 @@ async def get_user_info(token: str = Depends(oauth2_scheme)) -> UserPayload:
         )
 
 
-def check_entitlement(token: str, resource_id: str, scope: str = None) -> bool:
+def check_entitlement(token: str, resource_id: str) -> bool:
     """
     Check if the token has access to a specific resource and scope in Keycloak.
 
     :param token: User's access token.
     :param resource_id: Resource to check access for (e.g., API endpoint).
-    :param scope: Optional scope to validate (e.g., 'read', 'write').
     :return: True if access is granted, False otherwise.
     """
     token_url = f"{auth_settings.SERVER_URL}/realms/{auth_settings.REALM}/protocol/openid-connect/token"
@@ -103,9 +102,11 @@ def check_entitlement(token: str, resource_id: str, scope: str = None) -> bool:
         'client_id': auth_settings.CLIENT_ID,
         'client_secret': auth_settings.CLIENT_SECRET,
         'audience': auth_settings.CLIENT_ID,
-        'permission': f"{resource_id}#{scope}" if scope else resource_id,
+        'permission': resource_id,
     }
-    looger.info(f"check_entitlement: {data}")
+    looger.info(f"sending request to {token_url}")
+    looger.info(f"with headers: {headers}")
+    looger.info(f"with data: {data}")
     response = requests.post(token_url, data=data, headers=headers, verify=True)
     looger.info(response.json())
 
