@@ -92,7 +92,7 @@ async def check_entitlement(token: str, resource_id: str) -> bool:
     :param resource_id: Resource to check access for (e.g., API endpoint).
     :return: True if access is granted, False otherwise.
     """
-    token_url = f"http://127.0.0.1/realms/{auth_settings.REALM}/protocol/openid-connect/token"
+    token_url = f"{auth_settings.SERVER_URL}/{auth_settings.REALM}/protocol/openid-connect/token"
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': f'Bearer {token}',
