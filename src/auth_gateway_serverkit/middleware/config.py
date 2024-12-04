@@ -1,9 +1,6 @@
 from pydantic_settings import BaseSettings
 from .schemas import AuthConfigurations
-from dotenv import load_dotenv
 import os
-
-load_dotenv()
 
 
 class Settings(BaseSettings):
