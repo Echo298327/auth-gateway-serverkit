@@ -1,15 +1,17 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import ValidationError
 from .schemas import AuthConfigurations
-import os
 
 
 class Settings(BaseSettings):
-    SERVER_URL: str = os.getenv("SERVER_URL")
-    REALM: str = os.getenv("REALM")
-    CLIENT_ID: str = os.getenv("CLIENT_ID")
-    CLIENT_SECRET: str = os.getenv("CLIENT_SECRET")
-    AUTHORIZATION_URL: str = os.getenv("AUTHORIZATION_URL")
-    TOKEN_URL: str = os.getenv("TOKEN_URL")
+    SERVER_URL: str
+    REALM: str
+    CLIENT_ID: str
+    CLIENT_SECRET: str
+    AUTHORIZATION_URL: str
+    TOKEN_URL: str
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @classmethod
     def load_keycloak_credentials(cls) -> AuthConfigurations:
@@ -23,5 +25,9 @@ class Settings(BaseSettings):
         )
 
 
-settings = Settings()
-
+try:
+    settings = Settings()
+except ValidationError as e:
+    print("Configuration error:", e)
+    import sys
+    sys.exit(1)

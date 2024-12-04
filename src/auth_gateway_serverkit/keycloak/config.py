@@ -1,14 +1,21 @@
-from pydantic_settings import BaseSettings
-import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import ValidationError
 
 
 class Settings(BaseSettings):
-    SERVER_URL: str = os.getenv("SERVER_URL")
-    CLIENT_ID: str = os.getenv("CLIENT_ID")
-    REALM: str = os.getenv("REALM")
-    SCOPE: str = os.getenv("SCOPE")
-    KEYCLOAK_USER: str = os.getenv("KEYCLOAK_USER")
-    KEYCLOAK_PASSWORD: str = os.getenv("KEYCLOAK_PASSWORD")
+    SERVER_URL: str
+    CLIENT_ID: str
+    REALM: str
+    SCOPE: str
+    KEYCLOAK_USER: str
+    KEYCLOAK_PASSWORD: str
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except ValidationError as e:
+    print("Configuration error:", e)
+    import sys
+    sys.exit(1)
