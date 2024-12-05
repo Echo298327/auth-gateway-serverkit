@@ -82,10 +82,7 @@ async def get_resource_id(resource_name, admin_token, client_uuid):
     return None
 
 
-async def create_realm():
-    admin_token = await get_admin_token()
-    if not admin_token:
-        return False
+async def create_realm(admin_token):
 
     url = f"{settings.SERVER_URL}/admin/realms"
     headers = {
@@ -114,10 +111,7 @@ async def create_realm():
         return False
 
 
-async def create_client():
-    admin_token = await get_admin_token()
-    if not admin_token:
-        return False
+async def create_client(admin_token):
 
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients"
     headers = {
@@ -204,10 +198,7 @@ async def create_realm_roles(admin_token):
     return success
 
 
-async def enable_edit_username():
-    admin_token = await get_admin_token()
-    if not admin_token:
-        return False
+async def enable_edit_username(admin_token):
 
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}"
     headers = {
@@ -235,10 +226,7 @@ async def enable_edit_username():
         return False
 
 
-async def add_audience_protocol_mapper():
-    admin_token = await get_admin_token()
-    if not admin_token:
-        return False
+async def add_audience_protocol_mapper(admin_token):
 
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -456,27 +444,27 @@ async def initialize_keycloak_server(max_retries=30, retry_delay=5):
                 logger.error("Failed to get admin token")
                 return False
 
-            is_realm_created = await create_realm()
+            is_realm_created = await create_realm(admin_token)
             if not is_realm_created:
                 logger.error("Failed to create realm")
                 return False
 
-            is_client_created = await create_client()
+            is_client_created = await create_client(admin_token)
             if not is_client_created:
                 logger.error("Failed to create client")
                 return False
 
-            is_roles_created = await create_realm_roles()
+            is_roles_created = await create_realm_roles(admin_token)
             if not is_roles_created:
                 logger.error("Failed to create realm roles")
                 return False
 
-            is_mapper_added = await add_audience_protocol_mapper()
+            is_mapper_added = await add_audience_protocol_mapper(admin_token)
             if not is_mapper_added:
                 logger.error("Failed to add Audience Protocol Mapper")
                 return False
 
-            is_edit_username_enabled = await enable_edit_username()
+            is_edit_username_enabled = await enable_edit_username(admin_token)
             if not is_edit_username_enabled:
                 logger.error("Failed to enable edit username")
                 return False
