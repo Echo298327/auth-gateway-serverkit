@@ -61,6 +61,50 @@ async def get_client_uuid(admin_token):
             return None
 
 
+async def get_client_secret():
+    try:
+        # Step 1: Obtain the admin token
+        admin_token = await get_admin_token()
+        if not admin_token:
+            logger.error("Unable to obtain admin token.")
+            return None
+
+        # Step 2: Retrieve the client UUID using the existing get_client_uuid function
+        client_uuid = await get_client_uuid(admin_token)
+        if not client_uuid:
+            logger.error(f"Unable to retrieve UUID for client_id: {settings.CLIENT_ID}")
+            return None
+
+        # Step 3: Fetch the client secret using the client UUID
+        secret_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/client-secret"
+        headers = {
+            "Authorization": f"Bearer {admin_token}",
+            "Content-Type": "application/json"
+        }
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+            async with session.get(secret_url, headers=headers) as secret_response:
+                if secret_response.status == 200:
+                    secret_data = await secret_response.json()
+                    client_secret = secret_data.get('value')
+
+                    if not client_secret:
+                        logger.error("Client secret not found in the response.")
+                        return None
+
+                    return client_secret
+                else:
+                    response_text = await secret_response.text()
+                    logger.error(f"Error fetching client secret: {response_text}")
+                    return None
+
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP ClientError occurred while retrieving client secret: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Exception occurred while retrieving client secret: {e}")
+        return None
+
+
 async def get_resource_id(resource_name, admin_token, client_uuid):
     headers = {
         'Authorization': f'Bearer {admin_token}',

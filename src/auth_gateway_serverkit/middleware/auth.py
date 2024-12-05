@@ -4,6 +4,7 @@ from functools import wraps
 from fastapi.security import OAuth2PasswordBearer
 from keycloak import KeycloakOpenID
 from .config import settings as auth_settings
+from ..keycloak.initializer import get_client_secret
 from .schemas import UserPayload
 import requests
 import jwt
@@ -34,6 +35,12 @@ async def get_idp_public_key():
 
 
 async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
+    """
+    Get the payload from the token.
+
+    :param token: User's access token.
+    :return: Decoded token payload.
+    """
     try:
         key = await get_idp_public_key()
         audience = auth_settings.CLIENT_ID
@@ -66,6 +73,12 @@ async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
 
 
 async def get_user_info(token: str = Depends(oauth2_scheme)) -> UserPayload:
+    """
+    Get user information from the token.
+
+    :param token: User's access token.
+    :return: User's information.
+    """
     try:
         payload = await get_payload(token)
         return UserPayload(
@@ -92,25 +105,39 @@ async def check_entitlement(token: str, resource_id: str) -> bool:
     :param resource_id: Resource to check access for (e.g., API endpoint).
     :return: True if access is granted, False otherwise.
     """
-    token_url = f"{auth_settings.SERVER_URL}/{auth_settings.REALM}/protocol/openid-connect/token"
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': f'Bearer {token}',
-    }
-    data = {
-        'grant_type': 'urn:ietf:params:oauth:grant-type:uma-ticket',
-        'client_id': auth_settings.CLIENT_ID,
-        'client_secret': auth_settings.CLIENT_SECRET,
-        'audience': auth_settings.CLIENT_ID,
-        'permission': resource_id,
-    }
+    try:
+        if not auth_settings.CLIENT_SECRET:
+            client_secret = await get_client_secret()
+            if not client_secret:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to get client secret"
+                )
+            auth_settings.CLIENT_SECRET = client_secret
 
-    response = requests.post(token_url, data=data, headers=headers, verify=True)
-    looger.info(response.json())
+        token_url = f"{auth_settings.SERVER_URL}/{auth_settings.REALM}/protocol/openid-connect/token"
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': f'Bearer {token}',
+        }
+        data = {
+            'grant_type': 'urn:ietf:params:oauth:grant-type:uma-ticket',
+            'client_id': auth_settings.CLIENT_ID,
+            'client_secret': auth_settings.CLIENT_SECRET,
+            'audience': auth_settings.CLIENT_ID,
+            'permission': resource_id,
+        }
 
-    if response.status_code == 200 and 'access_token' in response.json():
-        return True
-    else:
+        response = requests.post(token_url, data=data, headers=headers, verify=True)
+        looger.info(response.json())
+
+        if response.status_code == 200 and 'access_token' in response.json():
+            return True
+        else:
+            return False
+
+    except Exception as e:
+        looger.error(f"Error checking entitlement: {str(e)}")
         return False
 
 
