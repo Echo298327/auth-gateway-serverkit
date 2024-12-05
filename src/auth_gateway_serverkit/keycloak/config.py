@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     CLIENT_ID: str
     REALM: str
     SCOPE: str
-    KEYCLOAK_USER: str
-    KEYCLOAK_PASSWORD: str
+    KC_BOOTSTRAP_ADMIN_USERNAME: str
+    KC_BOOTSTRAP_ADMIN_PASSWORD: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

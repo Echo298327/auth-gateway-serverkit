@@ -27,8 +27,8 @@ async def check_keycloak_connection():
 async def get_admin_token():
     url = f"{settings.SERVER_URL}/realms/master/protocol/openid-connect/token"
     payload = {
-        'username': settings.KEYCLOAK_USER,
-        'password': settings.KEYCLOAK_PASSWORD,
+        'username': settings.KC_BOOTSTRAP_ADMIN_USERNAME,
+        'password': settings.KC_BOOTSTRAP_ADMIN_PASSWORD,
         'grant_type': 'password',
         'client_id': 'admin-cli'
     }
