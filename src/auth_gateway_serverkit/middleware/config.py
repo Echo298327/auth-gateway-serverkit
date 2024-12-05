@@ -1,15 +1,18 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import ValidationError
 from .schemas import AuthConfigurations
+from typing import Optional
 
 
 class Settings(BaseSettings):
     SERVER_URL: str
     REALM: str
     CLIENT_ID: str
-    CLIENT_SECRET: str
     AUTHORIZATION_URL: str
     TOKEN_URL: str
+
+    # class variables not defined in the .env file
+    CLIENT_SECRET: Optional[str] = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
