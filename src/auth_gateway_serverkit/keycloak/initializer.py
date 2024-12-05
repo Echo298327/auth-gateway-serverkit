@@ -157,16 +157,19 @@ async def create_client():
         return False
 
 
-async def create_realm_roles():
-    admin_token = await get_admin_token()
-    if not admin_token:
+async def create_realm_roles(admin_token):
+    config_path = os.path.join(os.getcwd(), "keycloak_config.json")
+    if not os.path.exists(config_path):
+        logger.error("Configuration file not found")
         return False
 
-    roles_to_create = [
-        {'name': 'user', 'description': 'Standard user with limited access'},
-        {'name': 'admin', 'description': 'Administrator with elevated privileges'},
-        {'name': 'systemAdmin', 'description': 'System administrator with full access'}
-    ]
+    with open(config_path, 'r') as file:
+        config = json.load(file)
+
+    roles_to_create = config.get("realm_roles", [])
+    if not roles_to_create:
+        logger.warning("No realm roles defined in the configuration")
+        return True  # Nothing to create, but not a failure
 
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -178,10 +181,9 @@ async def create_realm_roles():
         url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles"
         payload = {
             'name': role['name'],
-            'description': role['description'],
+            'description': role.get('description', ''),
             'composite': False,
-            'clientRole': False,
-            'containerId': settings.REALM
+            'clientRole': False
         }
         try:
             async with aiohttp.ClientSession() as session:
@@ -191,7 +193,7 @@ async def create_realm_roles():
                     elif response.status == 409:
                         logger.info(f"Role '{role['name']}' already exists in realm '{settings.REALM}'")
                         # Optionally update the role description if it already exists
-                        # await update_role_description(role['name'], role['description'], headers)
+                        # await update_role_description(role['name'], role.get('description', ''), headers)
                     else:
                         logger.error(f"Failed to create role '{role['name']}'. Status: {response.status}, Response: {await response.text()}")
                         success = False
