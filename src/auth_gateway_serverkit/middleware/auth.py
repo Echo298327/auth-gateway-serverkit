@@ -115,7 +115,7 @@ async def check_entitlement(token: str, resource_id: str) -> bool:
                 )
             auth_settings.CLIENT_SECRET = client_secret
 
-        token_url = f"{auth_settings.SERVER_URL}/{auth_settings.REALM}/protocol/openid-connect/token"
+        token_url = f"{auth_settings.SERVER_URL}/realms/{auth_settings.REALM}/protocol/openid-connect/token"
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Authorization': f'Bearer {token}',
