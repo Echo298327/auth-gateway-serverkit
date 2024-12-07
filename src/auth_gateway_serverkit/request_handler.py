@@ -3,11 +3,17 @@ from fastapi import Request, status
 from pydantic import ValidationError
 
 
-def parse_json_request_model(model):
+def parse_request_body_to_model(model):
     async def parser(request: Request) -> Tuple[Optional[Any], list]:
+        content_type = request.headers.get("content-type", "")
         try:
-            json_data = await request.json()
-            parsed_data = model(**json_data)
+            if "application/json" in content_type:
+                json_data = await request.json()
+                parsed_data = model(**json_data)
+            else:
+                form_data = await request.form()
+                data_dict = dict(form_data)
+                parsed_data = model(**data_dict)
             return parsed_data, []
         except ValidationError as e:
             error_messages = []
@@ -18,8 +24,6 @@ def parse_json_request_model(model):
             return None, error_messages
         except Exception as e:
             return None, [f"An unexpected error occurred: {str(e)}"]
-
-    return parser
 
 
 def response(res=None, validation_errors=None, error=None, data=False):
@@ -46,8 +50,6 @@ async def parse_request(request):
 
     if 'application/json' in content_type:
         return await parse_json_request_data(request)
-    elif 'multipart/form-data' in content_type:
-        return await parse_multipart_request(request)
     else:
         return await parse_form_request(request)
 
@@ -56,13 +58,6 @@ async def parse_json_request_data(request):
     """Parse JSON request."""
     request_data = await request.json()
     return request_data, 'json'
-
-
-async def parse_multipart_request(request):
-    """Parse multipart form-data request."""
-    form = await request.form()
-    request_data = {key: value for key, value in form.multi_items()}
-    return request_data, 'multipart'
 
 
 async def parse_form_request(request):

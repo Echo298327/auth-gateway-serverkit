@@ -18,6 +18,7 @@ def is_valid_name(string: str) -> bool:
     # Check the length of the name
     if not (3 <= len(string) <= 20):
         return False
+    return True
 
 
 def is_valid_email(string: str) -> bool:
