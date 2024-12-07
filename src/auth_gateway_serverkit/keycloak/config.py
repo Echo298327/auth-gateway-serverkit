@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     CLIENT_ID: str
     REALM: str
     SCOPE: str
+    KEYCLOAK_FRONTEND_URL: str
     KC_BOOTSTRAP_ADMIN_USERNAME: str
     KC_BOOTSTRAP_ADMIN_PASSWORD: str
 

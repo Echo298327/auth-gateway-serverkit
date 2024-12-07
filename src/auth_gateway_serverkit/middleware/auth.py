@@ -127,8 +127,6 @@ async def check_entitlement(token: str, resource_id: str) -> bool:
             'audience': auth_settings.CLIENT_ID,
             'permission': resource_id,
         }
-        looger.info(f"sending request to {token_url}")
-        looger.info(f"data: {data}")
         response = requests.post(token_url, data=data, headers=headers, verify=True)
         if response.status_code == 200 and 'access_token' in response.json():
             return True

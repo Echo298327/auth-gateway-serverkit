@@ -126,6 +126,24 @@ async def get_resource_id(resource_name, admin_token, client_uuid):
     return None
 
 
+async def set_frontend_url(admin_token):
+    frontend_url = settings.KEYCLOAK_FRONTEND_URL
+    if not frontend_url:
+        logger.error("KEYCLOAK_FRONTEND_URL is not set")
+        return False
+
+    headers = {'Authorization': f'Bearer {admin_token}', 'Content-Type': 'application/json'}
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}"
+    payload = {'attributes': {'frontendUrl': frontend_url}}
+    async with aiohttp.ClientSession() as session:
+        async with session.put(url, headers=headers, json=payload) as response:
+            if response.status == 204:
+                logger.info(f"Frontend URL set to {frontend_url}")
+                return True
+            logger.error(f"Failed to set Frontend URL. Status: {response.status}, Response: {await response.text()}")
+            return False
+
+
 async def create_realm(admin_token):
 
     url = f"{settings.SERVER_URL}/admin/realms"
@@ -491,6 +509,11 @@ async def initialize_keycloak_server(max_retries=30, retry_delay=5):
             is_realm_created = await create_realm(admin_token)
             if not is_realm_created:
                 logger.error("Failed to create realm")
+                return False
+
+            is_frontend_set = await set_frontend_url(admin_token)
+            if not is_frontend_set:
+                logger.error("Failed to set Frontend URL")
                 return False
 
             is_client_created = await create_client(admin_token)
