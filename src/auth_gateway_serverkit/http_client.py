@@ -1,7 +1,6 @@
 import httpx
-from typing import Optional
+from typing import Optional, Dict
 from .logger import init_logger
-
 
 logger = init_logger("utils.requests")
 
@@ -11,12 +10,13 @@ async def post(
     json: Optional[dict] = None,
     data: Optional[dict] = None,
     files: Optional[dict] = None,
+    headers: Optional[Dict[str, str]] = None,
     timeout=20,
     connect=5
 ) -> dict:
     try:
         timeout = httpx.Timeout(timeout, connect=connect)
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
             if json is not None:
                 response = await client.post(url, json=json)
             elif files is not None or data is not None:
@@ -34,14 +34,15 @@ async def post(
 
 
 async def get(
-        url: str,
-        params: dict = None,
-        timeout=20,
-        connect=5
+    url: str,
+    params: dict = None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout=20,
+    connect=5
 ) -> dict:
     try:
         timeout = httpx.Timeout(timeout, connect=connect)
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=headers) as client:
             response = await client.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
@@ -56,13 +57,13 @@ async def get(
 async def delete(
     url: str,
     params: Optional[dict] = None,
+    headers: Optional[Dict[str, str]] = None,
     timeout=20,
     connect=5
 ) -> dict:
     try:
         timeout = httpx.Timeout(timeout, connect=connect)
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
             response = await client.delete(url, params=params)
             response.raise_for_status()
             return response.json()
@@ -74,19 +75,18 @@ async def delete(
         raise
 
 
-
 async def put(
     url: str,
     json: Optional[dict] = None,
     data: Optional[dict] = None,
     files: Optional[dict] = None,
+    headers: Optional[Dict[str, str]] = None,
     timeout=20,
     connect=5
 ) -> dict:
     try:
         timeout = httpx.Timeout(timeout, connect=connect)
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
             if json is not None:
                 response = await client.put(url, json=json)
             elif files is not None or data is not None:

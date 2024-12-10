@@ -12,7 +12,7 @@ from ..logger import init_logger
 
 # Set up OAuth2 (the tokenUrl can be set later when settings are initialized)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='None')
-looger = init_logger("serverkit.middleware.auth")
+logger = init_logger("serverkit.middleware.auth")
 
 
 def get_keycloak_openid():
@@ -51,7 +51,6 @@ async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
             audience=audience,
             leeway=0  # Ensure no leeway is applied
         )
-        looger.info(f"Decoded token: {decoded_token}")
         return decoded_token
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -132,11 +131,11 @@ async def check_entitlement(token: str, resource_id: str) -> bool:
         if response.status_code == 200 and 'access_token' in response.json():
             return True
         else:
-            looger.error(response.json())
+            logger.error(response.json())
             return False
 
     except Exception as e:
-        looger.error(f"Error checking entitlement: {str(e)}")
+        logger.error(f"Error checking entitlement: {str(e)}")
         return False
 
 
