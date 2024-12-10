@@ -189,7 +189,15 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
         return {'status': 'error', 'message': "Exception occurred while creating user in Keycloak"}
 
 
-async def update_user_in_keycloak(user_id, user_name, first_name, last_name, email, roles: list = None):
+async def update_user_in_keycloak(
+        user_id,
+        user_name,
+        first_name,
+        last_name,
+        email,
+        roles: list = None,
+        password: str = None
+):
     try:
         token = await get_admin_token()
         if not token:
@@ -267,6 +275,19 @@ async def update_user_in_keycloak(user_id, user_name, first_name, last_name, ema
                     if remove_response.status_code != 204:
                         logger.error(f"Error removing roles: {remove_response.text}")
                         return {'status': 'error', 'message': "Error removing roles in Keycloak"}
+
+            if password:
+                # Step 3: Update User Password
+                password_body = {
+                    "type": "password",
+                    "value": password,
+                    "temporary": False
+                }
+                password_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/reset-password"
+                password_response = await client.put(password_url, json=password_body, headers=headers)
+                if password_response.status_code != 204:
+                    logger.error(f"Error updating user password: {password_response.text}")
+                    return {'status': 'error', 'message': "Error updating user password in Keycloak"}
 
         return {'status': 'success'}
 

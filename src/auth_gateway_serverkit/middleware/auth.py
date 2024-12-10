@@ -51,6 +51,7 @@ async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
             audience=audience,
             leeway=0  # Ensure no leeway is applied
         )
+        looger.info(f"Decoded token: {decoded_token}")
         return decoded_token
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -151,6 +152,7 @@ def auth(get_user_by_uid: Callable[[str], Any]):
                 )
             token = token.replace("Bearer ", "")
             key_user = await get_user_info(token)
+            request.state.realm_roles = key_user.realm_roles
             service = kwargs.get("service")
             action = kwargs.get("action")
             resource = service + "/" + action
