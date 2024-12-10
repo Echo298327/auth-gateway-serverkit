@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, List
 from fastapi import Request, status
 from pydantic import ValidationError
 
@@ -77,3 +77,10 @@ async def parse_form_request(request):
     form = await request.form()
     request_data = {key: value for key, value in form.multi_items()}
     return request_data, 'form'
+
+
+async def get_request_roles(request: Request) -> List[str]:
+    roles_header = request.headers.get("x-roles")
+    if not roles_header:
+        return ['sts']
+    return roles_header.split(",")
