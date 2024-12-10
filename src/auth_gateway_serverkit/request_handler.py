@@ -4,16 +4,18 @@ from pydantic import ValidationError
 
 
 def parse_request_body_to_model(model):
+    """
+    Parse request body to model. handle both json and form data.
+    :param model: Pydantic model
+    :return: Tuple[Optional[Any], list] - parsed data and error messages
+    """
     async def parser(request: Request) -> Tuple[Optional[Any], list]:
-        content_type = request.headers.get("content-type", "")
         try:
-            if "application/json" in content_type:
+            if request.headers.get("content-type") == "application/json":
                 json_data = await request.json()
-                parsed_data = model(**json_data)
             else:
-                form_data = await request.form()
-                data_dict = dict(form_data)
-                parsed_data = model(**data_dict)
+                json_data = await request.form()
+            parsed_data = model(**json_data)
             return parsed_data, []
         except ValidationError as e:
             error_messages = []
@@ -25,8 +27,18 @@ def parse_request_body_to_model(model):
         except Exception as e:
             return None, [f"An unexpected error occurred: {str(e)}"]
 
+    return parser
+
 
 def response(res=None, validation_errors=None, error=None, data=False):
+    """
+    Response handler. Return response based on the response status.
+    :param res:
+    :param validation_errors:
+    :param error:
+    :param data:
+    :return: dict
+    """
     if validation_errors:
         return {"message": ", ".join(validation_errors), "status_code": status.HTTP_400_BAD_REQUEST}
     if error:
