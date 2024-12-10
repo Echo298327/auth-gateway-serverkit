@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 from ..logger import init_logger
 from .config import settings
+from .manager import get_admin_token, get_client_uuid
 
 
 logger = init_logger("serverkit.keycloak.initializer")
@@ -22,87 +23,6 @@ async def check_keycloak_connection():
     except aiohttp.ClientError as e:
         logger.error(f"Failed to connect to Keycloak server: {e}")
         return False
-
-
-async def get_admin_token():
-    url = f"{settings.SERVER_URL}/realms/master/protocol/openid-connect/token"
-    payload = {
-        'username': settings.KC_BOOTSTRAP_ADMIN_USERNAME,
-        'password': settings.KC_BOOTSTRAP_ADMIN_PASSWORD,
-        'grant_type': 'password',
-        'client_id': 'admin-cli'
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data['access_token']
-                else:
-                    logger.error(
-                        f"Failed to get admin token. Status: {response.status}, Response: {await response.text()}"
-                    )
-                    return None
-    except aiohttp.ClientError as e:
-        logger.error(f"Connection error while getting admin token: {e}")
-        return None
-
-
-async def get_client_uuid(admin_token):
-    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients?clientId={settings.CLIENT_ID}"
-    headers = {'Authorization': f'Bearer {admin_token}', 'Content-Type': 'application/json'}
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            if response.status == 200:
-                clients = await response.json()
-                if clients:
-                    return clients[0]['id']  # UUID of the client
-            logger.error(f"Failed to find client UUID for clientId '{settings.CLIENT_ID}'. Status: {response.status}")
-            return None
-
-
-async def get_client_secret():
-    try:
-        # Step 1: Obtain the admin token
-        admin_token = await get_admin_token()
-        if not admin_token:
-            logger.error("Unable to obtain admin token.")
-            return None
-
-        # Step 2: Retrieve the client UUID using the existing get_client_uuid function
-        client_uuid = await get_client_uuid(admin_token)
-        if not client_uuid:
-            logger.error(f"Unable to retrieve UUID for client_id: {settings.CLIENT_ID}")
-            return None
-
-        # Step 3: Fetch the client secret using the client UUID
-        secret_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/client-secret"
-        headers = {
-            "Authorization": f"Bearer {admin_token}",
-            "Content-Type": "application/json"
-        }
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
-            async with session.get(secret_url, headers=headers) as secret_response:
-                if secret_response.status == 200:
-                    secret_data = await secret_response.json()
-                    client_secret = secret_data.get('value')
-
-                    if not client_secret:
-                        logger.error("Client secret not found in the response.")
-                        return None
-
-                    return client_secret
-                else:
-                    response_text = await secret_response.text()
-                    logger.error(f"Error fetching client secret: {response_text}")
-                    return None
-
-    except aiohttp.ClientError as e:
-        logger.error(f"HTTP ClientError occurred while retrieving client secret: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Exception occurred while retrieving client secret: {e}")
-        return None
 
 
 async def get_resource_id(resource_name, admin_token, client_uuid):

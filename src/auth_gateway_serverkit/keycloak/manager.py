@@ -64,6 +64,63 @@ async def get_admin_token():
         return None
 
 
+async def get_client_uuid(admin_token):
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients?clientId={settings.CLIENT_ID}"
+    headers = {'Authorization': f'Bearer {admin_token}', 'Content-Type': 'application/json'}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                clients = await response.json()
+                if clients:
+                    return clients[0]['id']  # UUID of the client
+            logger.error(f"Failed to find client UUID for clientId '{settings.CLIENT_ID}'. Status: {response.status}")
+            return None
+
+
+async def get_client_secret():
+    try:
+        # Step 1: Obtain the admin token
+        admin_token = await get_admin_token()
+        if not admin_token:
+            logger.error("Unable to obtain admin token.")
+            return None
+
+        # Step 2: Retrieve the client UUID using the existing get_client_uuid function
+        client_uuid = await get_client_uuid(admin_token)
+        if not client_uuid:
+            logger.error(f"Unable to retrieve UUID for client_id: {settings.CLIENT_ID}")
+            return None
+
+        # Step 3: Fetch the client secret using the client UUID
+        secret_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/client-secret"
+        headers = {
+            "Authorization": f"Bearer {admin_token}",
+            "Content-Type": "application/json"
+        }
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+            async with session.get(secret_url, headers=headers) as secret_response:
+                if secret_response.status == 200:
+                    secret_data = await secret_response.json()
+                    client_secret = secret_data.get('value')
+
+                    if not client_secret:
+                        logger.error("Client secret not found in the response.")
+                        return None
+
+                    return client_secret
+                else:
+                    response_text = await secret_response.text()
+                    logger.error(f"Error fetching client secret: {response_text}")
+                    return None
+
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP ClientError occurred while retrieving client secret: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Exception occurred while retrieving client secret: {e}")
+        return None
+
+
 async def add_user_to_keycloak(user_name, first_name, last_name, email: str, password: str, role_list: list):
     try:
         token = await get_admin_token()
@@ -237,3 +294,52 @@ async def delete_user_from_keycloak(user_id):
     except Exception as e:
         logger.error(f"Error deleting user from keycloak: {e}")
         return {'status': 'error', 'message': "Error deleting user from keycloak"}
+
+
+async def execute_actions_email(
+        admin_token,
+        user_id,
+        actions=["UPDATE_PASSWORD"],
+        lifespan=3600,
+        redirect_uri=None,
+):
+    """Trigger Keycloak to send an email with specified actions to the user.
+
+    Args:
+        admin_token (str): Admin access token for Keycloak admin API.
+        user_id (str): The UUID of the user in Keycloak.
+        actions (list): A list of actions. Common actions: ["VERIFY_EMAIL"], ["UPDATE_PASSWORD"], or both.
+        lifespan (int): Link expiration time in seconds. Default is 3600 (1 hour).
+        redirect_uri (str): Optional. Where to redirect after the action is completed.
+
+    Returns:
+        bool: True if the email action was triggered successfully, False otherwise.
+    """
+    headers = {
+        "Authorization": f"Bearer {admin_token}",
+        "Content-Type": "application/json"
+    }
+
+    # Construct the URL for the execute actions endpoint
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/execute-actions-email"
+
+    # Build query parameters
+    params = {
+        "lifespan": lifespan
+    }
+
+    # You can append redirectUri and clientId if they are needed
+    if redirect_uri:
+        params["redirectUri"] = redirect_uri
+    if client_id:
+        params["clientId"] = settings.CLIENT_ID
+
+    async with aiohttp.ClientSession() as session:
+        async with session.put(url, headers=headers, json=actions, params=params) as response:
+            if response.status == 204:
+                logger.info("Email action triggered successfully. The user should receive an email.")
+                return True
+            else:
+                error_text = await response.text()
+                logger.error(f"Failed to trigger email action. Status: {response.status}, Response: {error_text}")
+                return False

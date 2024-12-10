@@ -4,7 +4,7 @@ from functools import wraps
 from fastapi.security import OAuth2PasswordBearer
 from keycloak import KeycloakOpenID
 from .config import settings as auth_settings
-from ..keycloak.initializer import get_client_secret
+from ..keycloak.manager import get_client_secret
 from .schemas import UserPayload
 import requests
 import jwt
