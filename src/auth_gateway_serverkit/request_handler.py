@@ -1,6 +1,7 @@
-from typing import Any, Tuple, Optional, List
+from typing import Any, Tuple, Optional, Dict
 from fastapi import Request, status
 from pydantic import ValidationError
+import json
 
 
 def parse_request_body_to_model(model):
@@ -79,8 +80,9 @@ async def parse_form_request(request):
     return request_data, 'form'
 
 
-async def get_request_roles(request: Request) -> List[str]:
-    roles_header = request.headers.get("x-roles")
-    if not roles_header:
-        return ['sts']
-    return roles_header.split(",")
+async def get_request_user(request: Request) -> Dict[str, Any]:
+    str_user = request.headers.get("x-user")
+    if str_user:
+        user = json.loads(str_user)
+        return user
+    return {}
