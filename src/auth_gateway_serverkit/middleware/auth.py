@@ -151,7 +151,6 @@ def auth(get_user_by_uid: Callable[[str], Any]):
                 )
             token = token.replace("Bearer ", "")
             key_user = await get_user_info(token)
-            request.state.realm_roles = key_user.realm_roles
             service = kwargs.get("service")
             action = kwargs.get("action")
             resource = service + "/" + action
@@ -167,6 +166,7 @@ def auth(get_user_by_uid: Callable[[str], Any]):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="User not found"
                 )
+            request.state.user = user
 
             # Call the original function if authorization is successful
             return await func(request, *args, **kwargs)
