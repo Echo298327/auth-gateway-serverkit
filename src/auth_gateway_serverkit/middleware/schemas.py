@@ -12,8 +12,8 @@ class AuthConfigurations(BaseModel):
 
 class UserPayload(BaseModel):
     id: str
-    username: str
-    email: str
-    first_name: str
-    last_name: str
+    # username: str
+    # email: str
+    # first_name: str
+    # last_name: str
     realm_roles: list

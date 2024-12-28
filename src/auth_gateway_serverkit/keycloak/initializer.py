@@ -64,6 +64,71 @@ async def set_frontend_url(admin_token):
             return False
 
 
+async def configure_claims(admin_token, client_uuid, exclude_claims=None):
+    """
+    Configures claims in tokens by modifying or removing protocol mappers.
+
+    Args:
+        admin_token (str): The admin token for Keycloak authentication.
+        client_uuid (str): The UUID of the Keycloak client.
+        exclude_claims (set): A set of claim names to be excluded from tokens.
+
+    Returns:
+        bool: True if all specified claims are configured successfully, False otherwise.
+    """
+    if exclude_claims is None:
+        exclude_claims = {
+            "scope",
+            "email_verified",
+            "name",
+            "preferred_username",
+            "given_name",
+            "family_name",
+            "email"
+        }
+
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/protocol-mappers/models"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    protocol_mappers = await response.json()
+
+                    # Filter mappers corresponding to claims to exclude
+                    mappers_to_remove = [
+                        mapper for mapper in protocol_mappers
+                        if mapper.get('config', {}).get('claim.name') in exclude_claims
+                    ]
+
+                    success = True
+                    for mapper in mappers_to_remove:
+                        mapper_id = mapper['id']
+                        delete_url = f"{url}/{mapper_id}"
+                        async with session.delete(delete_url, headers=headers) as delete_response:
+                            if delete_response.status == 204:
+                                logger.info(f"Removed claim '{mapper['config']['claim.name']}' from tokens successfully")
+                            else:
+                                logger.error(
+                                    f"Failed to remove claim '{mapper['config']['claim.name']}'. "
+                                    f"Status: {delete_response.status}, Response: {await delete_response.text()}"
+                                )
+                                success = False
+                    return success
+                else:
+                    logger.error(
+                        f"Failed to retrieve protocol mappers. Status: {response.status}, Response: {await response.text()}"
+                    )
+                    return False
+    except aiohttp.ClientError as e:
+        logger.error(f"Connection error while configuring claims: {e}")
+        return False
+
+
 async def create_realm(admin_token):
 
     url = f"{settings.SERVER_URL}/admin/realms"
@@ -458,6 +523,11 @@ async def initialize_keycloak_server(max_retries=30, retry_delay=5):
 
             client_uuid = await get_client_uuid(admin_token)
             if not client_uuid:
+                return False
+
+            is_claims_configured = await configure_claims(admin_token, client_uuid)
+            if not is_claims_configured:
+                logger.error("Failed to configure claims in tokens")
                 return False
 
             is_config_processed = await process_json_config(admin_token, client_uuid)
