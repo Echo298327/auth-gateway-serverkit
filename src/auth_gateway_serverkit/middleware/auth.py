@@ -83,10 +83,6 @@ async def get_user_info(token: str = Depends(oauth2_scheme)) -> UserPayload:
         payload = await get_payload(token)
         return UserPayload(
             id=payload.get("sub"),
-            # username=payload.get("preferred_username"),
-            # email=payload.get("email"),
-            # first_name=payload.get("given_name"),
-            # last_name=payload.get("family_name"),
             realm_roles=payload.get("realm_access", {}).get("roles", []),
         )
     except Exception as e:

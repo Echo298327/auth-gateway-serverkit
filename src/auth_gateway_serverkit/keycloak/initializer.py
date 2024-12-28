@@ -64,69 +64,107 @@ async def set_frontend_url(admin_token):
             return False
 
 
-async def configure_claims(admin_token, client_uuid, exclude_claims=None):
+async def get_assigned_client_scopes(admin_token, client_uuid):
     """
-    Configures claims in tokens by modifying or removing protocol mappers.
-
-    Args:
-        admin_token (str): The admin token for Keycloak authentication.
-        client_uuid (str): The UUID of the Keycloak client.
-        exclude_claims (set): A set of claim names to be excluded from tokens.
-
-    Returns:
-        bool: True if all specified claims are configured successfully, False otherwise.
+    Retrieve default and optional client scopes assigned to a particular client.
     """
-    if exclude_claims is None:
-        exclude_claims = {
-            "scope",
-            "email_verified",
-            "name",
-            "preferred_username",
-            "given_name",
-            "family_name",
-            "email"
-        }
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+
+    # Endpoint to list all scopes assigned to a client
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/default-client-scopes"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                logger.error(
+                    f"Failed to retrieve default client scopes. "
+                    f"Status: {response.status}, Response: {await response.text()}"
+                )
+                return []
+
+
+async def get_optional_client_scopes(admin_token, client_uuid):
+    """
+    Retrieve optional client scopes assigned to a particular client.
+    """
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/optional-client-scopes"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                logger.error(
+                    f"Failed to retrieve optional client scopes. "
+                    f"Status: {response.status}, Response: {await response.text()}"
+                )
+                return []
+
+
+async def remove_default_scopes(admin_token, client_uuid, scopes_to_remove=None):
+    """
+    Removes specified scopes (e.g. 'email', 'profile', 'roles') from both
+    default and optional client scopes.
+    """
+    if scopes_to_remove is None:
+        scopes_to_remove = {"email", "profile"}
 
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
     }
 
-    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/protocol-mappers/models"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    protocol_mappers = await response.json()
+    base_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}"
 
-                    # Filter mappers corresponding to claims to exclude
-                    mappers_to_remove = [
-                        mapper for mapper in protocol_mappers
-                        if mapper.get('config', {}).get('claim.name') in exclude_claims
-                    ]
+    # 1. Retrieve default client scopes
+    default_scopes = await get_assigned_client_scopes(admin_token, client_uuid)
+    # 2. Retrieve optional client scopes
+    optional_scopes = await get_optional_client_scopes(admin_token, client_uuid)
 
-                    success = True
-                    for mapper in mappers_to_remove:
-                        mapper_id = mapper['id']
-                        delete_url = f"{url}/{mapper_id}"
-                        async with session.delete(delete_url, headers=headers) as delete_response:
-                            if delete_response.status == 204:
-                                logger.info(f"Removed claim '{mapper['config']['claim.name']}' from tokens successfully")
-                            else:
-                                logger.error(
-                                    f"Failed to remove claim '{mapper['config']['claim.name']}'. "
-                                    f"Status: {delete_response.status}, Response: {await delete_response.text()}"
-                                )
-                                success = False
-                    return success
-                else:
-                    logger.error(
-                        f"Failed to retrieve protocol mappers. Status: {response.status}, Response: {await response.text()}"
-                    )
-                    return False
-    except aiohttp.ClientError as e:
-        logger.error(f"Connection error while configuring claims: {e}")
-        return False
+    success = True
+
+    async with aiohttp.ClientSession() as session:
+        # Remove from default scopes
+        for scope in default_scopes:
+            if scope["name"] in scopes_to_remove:
+                scope_id = scope["id"]
+                remove_url = f"{base_url}/default-client-scopes/{scope_id}"
+                async with session.delete(remove_url, headers=headers) as resp:
+                    if resp.status == 204:
+                        logger.info(f"Removed default client scope '{scope['name']}' successfully.")
+                    else:
+                        logger.error(
+                            f"Failed to remove default client scope '{scope['name']}'. "
+                            f"Status: {resp.status}, Response: {await resp.text()}"
+                        )
+                        success = False
+
+        # Remove from optional scopes
+        for scope in optional_scopes:
+            if scope["name"] in scopes_to_remove:
+                scope_id = scope["id"]
+                remove_url = f"{base_url}/optional-client-scopes/{scope_id}"
+                async with session.delete(remove_url, headers=headers) as resp:
+                    if resp.status == 204:
+                        logger.info(f"Removed optional client scope '{scope['name']}' successfully.")
+                    else:
+                        logger.error(
+                            f"Failed to remove optional client scope '{scope['name']}'. "
+                            f"Status: {resp.status}, Response: {await resp.text()}"
+                        )
+                        success = False
+
+    return success
 
 
 async def create_realm(admin_token):
@@ -525,9 +563,9 @@ async def initialize_keycloak_server(max_retries=30, retry_delay=5):
             if not client_uuid:
                 return False
 
-            is_claims_configured = await configure_claims(admin_token, client_uuid)
-            if not is_claims_configured:
-                logger.error("Failed to configure claims in tokens")
+            scopes_removed = await remove_default_scopes(admin_token, client_uuid)
+            if not scopes_removed:
+                logger.error("Failed to remove unwanted default/optional scopes")
                 return False
 
             is_config_processed = await process_json_config(admin_token, client_uuid)
