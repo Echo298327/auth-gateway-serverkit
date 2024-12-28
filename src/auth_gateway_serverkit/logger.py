@@ -4,6 +4,20 @@ import sys
 
 
 class JsonFormatter(logging.Formatter):
+    # ANSI escape codes for colors
+    COLORS = {
+        "ERROR": "\033[91m",  # Red
+        "WARNING": "\033[93m",  # Yellow
+        "RESET": "\033[0m"  # Reset to default
+    }
+
+    def __init__(self, datefmt="%Y-%m-%d %H:%M:%S"):
+        """
+        Initialize the formatter with a custom date format.
+        :param datefmt: Date format for the log messages.
+        """
+        super().__init__(datefmt=datefmt)
+
     def format(self, record):
         log_message = {
             "time": self.formatTime(record, self.datefmt),
@@ -11,7 +25,9 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage()
         }
-        return json.dumps(log_message)
+        # Apply color based on log level
+        color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
+        return f"{color}{json.dumps(log_message)}{self.COLORS['RESET']}"
 
 
 def init_logger(name):
