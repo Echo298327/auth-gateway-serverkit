@@ -25,6 +25,12 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage()
         }
+
+        if record.levelno >= logging.ERROR:
+            log_message.update({
+                "line": record.lineno,
+            })
+
         # Apply color based on log level
         color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
         return f"{color}{json.dumps(log_message)}{self.COLORS['RESET']}"
