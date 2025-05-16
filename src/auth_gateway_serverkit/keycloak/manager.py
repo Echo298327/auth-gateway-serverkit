@@ -394,7 +394,7 @@ async def retrieve_client_token(user_name, password):
                 logger.error("Failed to get client secret")
                 return None
 
-        url = f"{settings.KEYCLOAK_URL}/realms/{settings.REALM}/protocol/openid-connect/token"
+        url = f"{server_url}/realms/{realm}/protocol/openid-connect/token"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
