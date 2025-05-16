@@ -408,18 +408,7 @@ async def retrieve_client_token(user_name, password):
         }
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(url, data=payload, headers=headers)
-            if response.status_code == 200:
-                res = response.json()
-                data = {
-                    "access_token": res.get("access_token"),
-                    "expires_in": res.get("expires_in"),
-                    "refresh_expires_in": res.get("refresh_expires_in"),
-                    "refresh_token": res.get("refresh_token"),
-                }
-                return data
-            else:
-                logger.error(f"Error retrieving token: {response.text}")
-                return None
+            return response
     except Exception as e:
         logger.error(f"Request error: {e}")
         return None
