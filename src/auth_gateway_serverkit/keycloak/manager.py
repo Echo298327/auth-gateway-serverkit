@@ -370,3 +370,56 @@ async def execute_actions_email(
                 error_text = await response.text()
                 logger.error(f"Failed to trigger email action. Status: {response.status}, Response: {error_text}")
                 return False
+
+
+async def retrieve_client_token(user_name, password):
+    """
+    Retrieve a token from Keycloak using the Resource Owner Password Credentials Grant.
+
+    Args:
+        user_name (str): The username of the user.
+        password (str): The password of the user.
+
+    Returns:
+        dict: A dictionary containing the access token and other token details.
+    """
+    try:
+        if settings.CLIENT_SECRET:
+            client_secret = settings.CLIENT_SECRET
+        else:
+            logger.info("Fetching client secret from Keycloak")
+            client_secret = await get_client_secret()
+            settings.CLIENT_SECRET = client_secret
+            if not client_secret:
+                logger.error("Failed to get client secret")
+                return None
+
+        url = f"{settings.KEYCLOAK_URL}/realms/{settings.REALM}/protocol/openid-connect/token"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        payload = {
+            "username": user_name,
+            "password": password,
+            "grant_type": "password",
+            "scope": "openid",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(url, data=payload, headers=headers)
+            if response.status_code == 200:
+                res = response.json()
+                data = {
+                    "access_token": res.get("access_token"),
+                    "expires_in": res.get("expires_in"),
+                    "refresh_expires_in": res.get("refresh_expires_in"),
+                    "refresh_token": res.get("refresh_token"),
+                }
+                return data
+            else:
+                logger.error(f"Error retrieving token: {response.text}")
+                return None
+    except Exception as e:
+        logger.error(f"Request error: {e}")
+        return None

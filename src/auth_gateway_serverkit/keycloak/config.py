@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import ValidationError
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -12,6 +13,8 @@ class Settings(BaseSettings):
     KC_BOOTSTRAP_ADMIN_PASSWORD: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    CLIENT_SECRET: Optional[str] = None
 
 
 try:
