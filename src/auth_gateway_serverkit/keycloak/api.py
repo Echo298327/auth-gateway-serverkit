@@ -7,7 +7,14 @@ from ..logger import init_logger
 logger = init_logger("serverkit.keycloak.api")
 
 
-async def get_resource_id(resource_name, admin_token, client_uuid):
+async def get_resource_id(resource_name, admin_token, client_uuid) -> str | None:
+    """
+    Retrieve the resource ID for a given resource name.
+    :param resource_name:
+    :param admin_token:
+    :param client_uuid:
+    :return: Resource ID if found, None otherwise
+    """
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
@@ -28,7 +35,12 @@ async def get_resource_id(resource_name, admin_token, client_uuid):
     return None
 
 
-async def set_frontend_url(admin_token):
+async def set_frontend_url(admin_token) -> bool:
+    """
+    Set the frontend URL for the Keycloak realm.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
     frontend_url = settings.KEYCLOAK_FRONTEND_URL
     if not frontend_url:
         logger.error("KEYCLOAK_FRONTEND_URL is not set")
@@ -46,9 +58,12 @@ async def set_frontend_url(admin_token):
             return False
 
 
-async def get_assigned_client_scopes(admin_token, client_uuid):
+async def get_assigned_client_scopes(admin_token, client_uuid) -> list:
     """
     Retrieve default and optional client scopes assigned to a particular client.
+    :param admin_token:
+    :param client_uuid:
+    :return: List of assigned client scopes
     """
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -70,9 +85,12 @@ async def get_assigned_client_scopes(admin_token, client_uuid):
                 return []
 
 
-async def get_optional_client_scopes(admin_token, client_uuid):
+async def get_optional_client_scopes(admin_token, client_uuid) -> list:
     """
     Retrieve optional client scopes assigned to a particular client.
+    :param admin_token:
+    :param client_uuid:
+    :return: List of optional client scopes
     """
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -93,10 +111,14 @@ async def get_optional_client_scopes(admin_token, client_uuid):
                 return []
 
 
-async def remove_default_scopes(admin_token, client_uuid, scopes_to_remove=None):
+async def remove_default_scopes(admin_token, client_uuid, scopes_to_remove=None) -> bool:
     """
     Removes specified scopes (e.g. 'email', 'profile', 'roles') from both
     default and optional client scopes.
+    :param admin_token: Admin token for authentication
+    :param client_uuid: UUID of the client
+    :param scopes_to_remove: Set of scopes to remove
+    :return: True if successful, False otherwise
     """
     if scopes_to_remove is None:
         scopes_to_remove = {"email", "profile"}
@@ -149,7 +171,12 @@ async def remove_default_scopes(admin_token, client_uuid, scopes_to_remove=None)
     return success
 
 
-async def create_realm(admin_token):
+async def create_realm(admin_token) -> bool:
+    """
+    Create a new realm in Keycloak.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
 
     url = f"{settings.SERVER_URL}/admin/realms"
     headers = {
@@ -178,7 +205,12 @@ async def create_realm(admin_token):
         return False
 
 
-async def create_client(admin_token):
+async def create_client(admin_token) -> bool:
+    """
+    Create a new client in Keycloak.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
 
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients"
     headers = {
@@ -218,7 +250,12 @@ async def create_client(admin_token):
         return False
 
 
-async def create_realm_roles(admin_token):
+async def create_realm_roles(admin_token) -> bool:
+    """
+    Create realm roles in Keycloak based on the configuration file.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
     config_path = os.path.join(os.getcwd(), "keycloak_config.json")
     if not os.path.exists(config_path):
         logger.error("Configuration file not found")
@@ -265,7 +302,12 @@ async def create_realm_roles(admin_token):
     return success
 
 
-async def enable_edit_username(admin_token):
+async def enable_edit_username(admin_token) -> bool:
+    """
+    Enable the option to edit usernames in the Keycloak realm.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
 
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}"
     headers = {
@@ -293,7 +335,12 @@ async def enable_edit_username(admin_token):
         return False
 
 
-async def add_audience_protocol_mapper(admin_token):
+async def add_audience_protocol_mapper(admin_token) -> bool:
+    """
+    Add an audience protocol mapper to the client in Keycloak.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
 
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -346,7 +393,16 @@ async def add_audience_protocol_mapper(admin_token):
         return False
 
 
-async def create_policy(policy_name, description, roles, admin_token, client_uuid):
+async def create_policy(policy_name, description, roles, admin_token, client_uuid) -> bool:
+    """
+    Create a new policy in Keycloak.
+    :param policy_name:
+    :param description:
+    :param roles:
+    :param admin_token:
+    :param client_uuid:
+    :return: True if successful, False otherwise
+    """
 
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -374,7 +430,18 @@ async def create_policy(policy_name, description, roles, admin_token, client_uui
         return False
 
 
-async def create_permission(permission_name, description, policies, resource_ids, admin_token, client_uuid):
+async def create_permission(permission_name, description, policies, resource_ids, admin_token, client_uuid) -> bool:
+    """
+    Create a new permission in Keycloak.
+    :param permission_name:
+    :param description:
+    :param policies:
+    :param resource_ids:
+    :param admin_token:
+    :param client_uuid:
+    :return: True if successful, False otherwise
+    """
+
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
@@ -402,7 +469,17 @@ async def create_permission(permission_name, description, policies, resource_ids
         return False
 
 
-async def create_resource(resource_name, display_name, url,admin_token, client_uuid):
+async def create_resource(resource_name, display_name, url,admin_token, client_uuid) -> bool:
+    """
+    Create a new resource in Keycloak.
+    :param resource_name:
+    :param display_name:
+    :param url:
+    :param admin_token:
+    :param client_uuid:
+    :return: True if successful, False otherwise
+    """
+
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
