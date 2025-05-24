@@ -1,6 +1,6 @@
 import os
 import json
-import aiohttp
+from ..aiohttp_client import get, post, put, delete
 from .config import settings
 from ..logger import init_logger
 
@@ -21,16 +21,14 @@ async def get_resource_id(resource_name, admin_token, client_uuid) -> str | None
     }
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/authz/resource-server/resource"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    resources = await response.json()
-                    for resource in resources:
-                        if resource['name'] == resource_name:
-                            return resource['_id']
-                else:
-                    logger.error(f"Failed to fetch resources. Status: {response.status}, Response: {await response.text()}")
-    except aiohttp.ClientError as e:
+        status, response_text, resources = await get(url, headers=headers)
+        if status == 200:
+            for resource in resources:
+                if resource['name'] == resource_name:
+                    return resource['_id']
+        else:
+            logger.error(f"Failed to fetch resources. Status: {status}, Response: {response_text}")
+    except Exception as e:
         logger.error(f"Connection error while retrieving resource ID for '{resource_name}': {e}")
     return None
 
@@ -49,13 +47,16 @@ async def set_frontend_url(admin_token) -> bool:
     headers = {'Authorization': f'Bearer {admin_token}', 'Content-Type': 'application/json'}
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}"
     payload = {'attributes': {'frontendUrl': frontend_url}}
-    async with aiohttp.ClientSession() as session:
-        async with session.put(url, headers=headers, json=payload) as response:
-            if response.status == 204:
-                logger.info(f"Frontend URL set to {frontend_url}")
-                return True
-            logger.error(f"Failed to set Frontend URL. Status: {response.status}, Response: {await response.text()}")
-            return False
+    try:
+        status, response_text, _ = await put(url, json=payload, headers=headers)
+        if status == 204:
+            logger.info(f"Frontend URL set to {frontend_url}")
+            return True
+        logger.error(f"Failed to set Frontend URL. Status: {status}, Response: {response_text}")
+        return False
+    except Exception as e:
+        logger.error(f"Connection error while setting frontend URL: {e}")
+        return False
 
 
 async def get_assigned_client_scopes(admin_token, client_uuid) -> list:
@@ -70,19 +71,20 @@ async def get_assigned_client_scopes(admin_token, client_uuid) -> list:
         'Content-Type': 'application/json'
     }
 
-    # Endpoint to list all scopes assigned to a client
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/default-client-scopes"
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                logger.error(
-                    f"Failed to retrieve default client scopes. "
-                    f"Status: {response.status}, Response: {await response.text()}"
-                )
-                return []
+    try:
+        status, response_text, scopes = await get(url, headers=headers)
+        if status == 200:
+            return scopes
+        else:
+            logger.error(
+                f"Failed to retrieve default client scopes. "
+                f"Status: {status}, Response: {response_text}"
+            )
+            return []
+    except Exception as e:
+        logger.error(f"Connection error while retrieving default client scopes: {e}")
+        return []
 
 
 async def get_optional_client_scopes(admin_token, client_uuid) -> list:
@@ -98,17 +100,19 @@ async def get_optional_client_scopes(admin_token, client_uuid) -> list:
     }
 
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/optional-client-scopes"
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                logger.error(
-                    f"Failed to retrieve optional client scopes. "
-                    f"Status: {response.status}, Response: {await response.text()}"
-                )
-                return []
+    try:
+        status, response_text, scopes = await get(url, headers=headers)
+        if status == 200:
+            return scopes
+        else:
+            logger.error(
+                f"Failed to retrieve optional client scopes. "
+                f"Status: {status}, Response: {response_text}"
+            )
+            return []
+    except Exception as e:
+        logger.error(f"Connection error while retrieving optional client scopes: {e}")
+        return []
 
 
 async def remove_default_scopes(admin_token, client_uuid, scopes_to_remove=None) -> bool:
@@ -137,36 +141,43 @@ async def remove_default_scopes(admin_token, client_uuid, scopes_to_remove=None)
 
     success = True
 
-    async with aiohttp.ClientSession() as session:
-        # Remove from default scopes
-        for scope in default_scopes:
-            if scope["name"] in scopes_to_remove:
-                scope_id = scope["id"]
-                remove_url = f"{base_url}/default-client-scopes/{scope_id}"
-                async with session.delete(remove_url, headers=headers) as resp:
-                    if resp.status == 204:
-                        logger.info(f"Removed default client scope '{scope['name']}' successfully.")
-                    else:
-                        logger.error(
-                            f"Failed to remove default client scope '{scope['name']}'. "
-                            f"Status: {resp.status}, Response: {await resp.text()}"
-                        )
-                        success = False
+    # Remove from default scopes
+    for scope in default_scopes:
+        if scope["name"] in scopes_to_remove:
+            scope_id = scope["id"]
+            remove_url = f"{base_url}/default-client-scopes/{scope_id}"
+            try:
+                status, response_text, _ = await delete(remove_url, headers=headers)
+                if status == 204:
+                    logger.info(f"Removed default client scope '{scope['name']}' successfully.")
+                else:
+                    logger.error(
+                        f"Failed to remove default client scope '{scope['name']}'. "
+                        f"Status: {status}, Response: {response_text}"
+                    )
+                    success = False
+            except Exception as e:
+                logger.error(f"Connection error while removing default client scope '{scope['name']}': {e}")
+                success = False
 
-        # Remove from optional scopes
-        for scope in optional_scopes:
-            if scope["name"] in scopes_to_remove:
-                scope_id = scope["id"]
-                remove_url = f"{base_url}/optional-client-scopes/{scope_id}"
-                async with session.delete(remove_url, headers=headers) as resp:
-                    if resp.status == 204:
-                        logger.info(f"Removed optional client scope '{scope['name']}' successfully.")
-                    else:
-                        logger.error(
-                            f"Failed to remove optional client scope '{scope['name']}'. "
-                            f"Status: {resp.status}, Response: {await resp.text()}"
-                        )
-                        success = False
+    # Remove from optional scopes
+    for scope in optional_scopes:
+        if scope["name"] in scopes_to_remove:
+            scope_id = scope["id"]
+            remove_url = f"{base_url}/optional-client-scopes/{scope_id}"
+            try:
+                status, response_text, _ = await delete(remove_url, headers=headers)
+                if status == 204:
+                    logger.info(f"Removed optional client scope '{scope['name']}' successfully.")
+                else:
+                    logger.error(
+                        f"Failed to remove optional client scope '{scope['name']}'. "
+                        f"Status: {status}, Response: {response_text}"
+                    )
+                    success = False
+            except Exception as e:
+                logger.error(f"Connection error while removing optional client scope '{scope['name']}': {e}")
+                success = False
 
     return success
 
@@ -177,7 +188,6 @@ async def create_realm(admin_token) -> bool:
     :param admin_token:
     :return: True if successful, False otherwise
     """
-
     url = f"{settings.SERVER_URL}/admin/realms"
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -189,18 +199,17 @@ async def create_realm(admin_token) -> bool:
         'accessTokenLifespan': 36000,  # Set token lifespan to 10 hours (in seconds)
     }
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Realm '{settings.REALM}' created successfully")
-                    return True
-                elif response.status == 409:
-                    logger.info(f"Realm '{settings.REALM}' already exists")
-                    return True
-                else:
-                    logger.error(f"Failed to create realm. Status: {response.status}, Response: {await response.text()}")
-                    return False
-    except aiohttp.ClientError as e:
+        status, response_text, _ = await post(url, json=payload, headers=headers)
+        if status == 201:
+            logger.info(f"Realm '{settings.REALM}' created successfully")
+            return True
+        elif status == 409:
+            logger.info(f"Realm '{settings.REALM}' already exists")
+            return True
+        else:
+            logger.error(f"Failed to create realm. Status: {status}, Response: {response_text}")
+            return False
+    except Exception as e:
         logger.error(f"Connection error while creating realm: {e}")
         return False
 
@@ -211,7 +220,6 @@ async def create_client(admin_token) -> bool:
     :param admin_token:
     :return: True if successful, False otherwise
     """
-
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients"
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -234,18 +242,17 @@ async def create_client(admin_token) -> bool:
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Client '{settings.CLIENT_ID}' created successfully")
-                    return True
-                elif response.status == 409:
-                    logger.info(f"Client '{settings.CLIENT_ID}' already exists")
-                    return True
-                else:
-                    logger.error(f"Failed to create client. Status: {response.status}, Response: {await response.text()}")
-                    return False
-    except aiohttp.ClientError as e:
+        status, response_text, _ = await post(url, json=payload, headers=headers)
+        if status == 201:
+            logger.info(f"Client '{settings.CLIENT_ID}' created successfully")
+            return True
+        elif status == 409:
+            logger.info(f"Client '{settings.CLIENT_ID}' already exists")
+            return True
+        else:
+            logger.error(f"Failed to create client. Status: {status}, Response: {response_text}")
+            return False
+    except Exception as e:
         logger.error(f"Connection error while creating client: {e}")
         return False
 
@@ -284,18 +291,15 @@ async def create_realm_roles(admin_token) -> bool:
             'clientRole': False
         }
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as response:
-                    if response.status == 201:
-                        logger.info(f"Role '{role['name']}' created successfully in realm '{settings.REALM}'")
-                    elif response.status == 409:
-                        logger.info(f"Role '{role['name']}' already exists in realm '{settings.REALM}'")
-                        # Optionally update the role description if it already exists
-                        # await update_role_description(role['name'], role.get('description', ''), headers)
-                    else:
-                        logger.error(f"Failed to create role '{role['name']}'. Status: {response.status}, Response: {await response.text()}")
-                        success = False
-        except aiohttp.ClientError as e:
+            status, response_text, _ = await post(url, json=payload, headers=headers)
+            if status == 201:
+                logger.info(f"Role '{role['name']}' created successfully in realm '{settings.REALM}'")
+            elif status == 409:
+                logger.info(f"Role '{role['name']}' already exists in realm '{settings.REALM}'")
+            else:
+                logger.error(f"Failed to create role '{role['name']}'. Status: {status}, Response: {response_text}")
+                success = False
+        except Exception as e:
             logger.error(f"Connection error while creating role '{role['name']}': {e}")
             success = False
 
@@ -308,7 +312,6 @@ async def enable_edit_username(admin_token) -> bool:
     :param admin_token:
     :return: True if successful, False otherwise
     """
-
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}"
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -321,16 +324,14 @@ async def enable_edit_username(admin_token) -> bool:
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.put(url, headers=headers, json=payload) as response:
-                if response.status == 204:
-                    logger.info(f"Enabled edit username for realm '{settings.REALM}' successfully")
-                    return True
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Failed to enable edit username. Status: {response.status}, Response: {error_text}")
-                    return False
-    except aiohttp.ClientError as e:
+        status, response_text, _ = await put(url, json=payload, headers=headers)
+        if status == 204:
+            logger.info(f"Enabled edit username for realm '{settings.REALM}' successfully")
+            return True
+        else:
+            logger.error(f"Failed to enable edit username. Status: {status}, Response: {response_text}")
+            return False
+    except Exception as e:
         logger.error(f"Connection error while enabling edit username: {e}")
         return False
 
@@ -341,7 +342,6 @@ async def add_audience_protocol_mapper(admin_token) -> bool:
     :param admin_token:
     :return: True if successful, False otherwise
     """
-
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
@@ -350,45 +350,43 @@ async def add_audience_protocol_mapper(admin_token) -> bool:
     # First, get the client ID (UUID) for your client
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients?clientId={settings.CLIENT_ID}"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    clients = await response.json()
-                    if clients:
-                        client_uuid = clients[0]['id']
-                    else:
-                        logger.error(f"Client '{settings.CLIENT_ID}' not found")
-                        return False
-                else:
-                    logger.error(f"Failed to retrieve client. Status: {response.status}, Response: {await response.text()}")
-                    return False
+        status, response_text, clients = await get(url, headers=headers)
+        if status == 200:
+            if clients:
+                client_uuid = clients[0]['id']
+            else:
+                logger.error(f"Client '{settings.CLIENT_ID}' not found")
+                return False
+        else:
+            logger.error(f"Failed to retrieve client. Status: {status}, Response: {response_text}")
+            return False
 
-            # Now, add the Protocol Mapper to the client
-            url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/protocol-mappers/models"
-            payload = {
-                "name": "audience",
-                "protocol": "openid-connect",
-                "protocolMapper": "oidc-audience-mapper",
-                "consentRequired": False,
-                "config": {
-                    "included.client.audience": settings.CLIENT_ID,
-                    "id.token.claim": "true",
-                    "access.token.claim": "true",
-                    "claim.name": "aud",
-                    "userinfo.token.claim": "false"
-                }
+        # Now, add the Protocol Mapper to the client
+        url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/protocol-mappers/models"
+        payload = {
+            "name": "audience",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-audience-mapper",
+            "consentRequired": False,
+            "config": {
+                "included.client.audience": settings.CLIENT_ID,
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "aud",
+                "userinfo.token.claim": "false"
             }
-            async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Audience Protocol Mapper added successfully to client '{settings.CLIENT_ID}'")
-                    return True
-                elif response.status == 409:
-                    logger.info(f"Audience Protocol Mapper already exists for client '{settings.CLIENT_ID}'")
-                    return True
-                else:
-                    logger.error(f"Failed to add Audience Protocol Mapper. Status: {response.status}, Response: {await response.text()}")
-                    return False
-    except aiohttp.ClientError as e:
+        }
+        status, response_text, _ = await post(url, json=payload, headers=headers)
+        if status == 201:
+            logger.info(f"Audience Protocol Mapper added successfully to client '{settings.CLIENT_ID}'")
+            return True
+        elif status == 409:
+            logger.info(f"Audience Protocol Mapper already exists for client '{settings.CLIENT_ID}'")
+            return True
+        else:
+            logger.error(f"Failed to add Audience Protocol Mapper. Status: {status}, Response: {response_text}")
+            return False
+    except Exception as e:
         logger.error(f"Connection error while adding Audience Protocol Mapper: {e}")
         return False
 
@@ -403,7 +401,6 @@ async def create_policy(policy_name, description, roles, admin_token, client_uui
     :param client_uuid:
     :return: True if successful, False otherwise
     """
-
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
@@ -416,16 +413,15 @@ async def create_policy(policy_name, description, roles, admin_token, client_uui
         "roles": [{"id": role} for role in roles]
     }
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Policy '{policy_name}' created successfully")
-                elif response.status == 409:
-                    logger.info(f"Policy '{policy_name}' already exists")
-                else:
-                    logger.error(f"Failed to create policy '{policy_name}'. Status: {response.status}, Response: {await response.text()}")
-                return response.status == 201 or response.status == 409
-    except aiohttp.ClientError as e:
+        status, response_text, _ = await post(url, json=payload, headers=headers)
+        if status == 201:
+            logger.info(f"Policy '{policy_name}' created successfully")
+        elif status == 409:
+            logger.info(f"Policy '{policy_name}' already exists")
+        else:
+            logger.error(f"Failed to create policy '{policy_name}'. Status: {status}, Response: {response_text}")
+        return status == 201 or status == 409
+    except Exception as e:
         logger.error(f"Connection error while creating policy '{policy_name}': {e}")
         return False
 
@@ -441,7 +437,6 @@ async def create_permission(permission_name, description, policies, resource_ids
     :param client_uuid:
     :return: True if successful, False otherwise
     """
-
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
@@ -455,21 +450,20 @@ async def create_permission(permission_name, description, policies, resource_ids
         "policies": policies
     }
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Permission '{permission_name}' created successfully")
-                elif response.status == 409:
-                    logger.info(f"Permission '{permission_name}' already exists")
-                else:
-                    logger.error(f"Failed to create permission '{permission_name}'. Status: {response.status}, Response: {await response.text()}")
-                return response.status == 201 or response.status == 409
-    except aiohttp.ClientError as e:
+        status, response_text, _ = await post(url, json=payload, headers=headers)
+        if status == 201:
+            logger.info(f"Permission '{permission_name}' created successfully")
+        elif status == 409:
+            logger.info(f"Permission '{permission_name}' already exists")
+        else:
+            logger.error(f"Failed to create permission '{permission_name}'. Status: {status}, Response: {response_text}")
+        return status == 201 or status == 409
+    except Exception as e:
         logger.error(f"Connection error while creating permission '{permission_name}': {e}")
         return False
 
 
-async def create_resource(resource_name, display_name, url,admin_token, client_uuid) -> bool:
+async def create_resource(resource_name, display_name, url, admin_token, client_uuid) -> bool:
     """
     Create a new resource in Keycloak.
     :param resource_name:
@@ -479,7 +473,6 @@ async def create_resource(resource_name, display_name, url,admin_token, client_u
     :param client_uuid:
     :return: True if successful, False otherwise
     """
-
     headers = {
         'Authorization': f'Bearer {admin_token}',
         'Content-Type': 'application/json'
@@ -493,15 +486,14 @@ async def create_resource(resource_name, display_name, url,admin_token, client_u
         "type": "REST API",
     }
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(resource_url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Resource '{resource_name}' created successfully")
-                elif response.status == 409:
-                    logger.info(f"Resource '{resource_name}' already exists")
-                else:
-                    logger.error(f"Failed to create resource '{resource_name}'. Status: {response.status}, Response: {await response.text()}")
-                return response.status == 201 or response.status == 409
-    except aiohttp.ClientError as e:
+        status, response_text, _ = await post(resource_url, json=payload, headers=headers)
+        if status == 201:
+            logger.info(f"Resource '{resource_name}' created successfully")
+        elif status == 409:
+            logger.info(f"Resource '{resource_name}' already exists")
+        else:
+            logger.error(f"Failed to create resource '{resource_name}'. Status: {status}, Response: {response_text}")
+        return status == 201 or status == 409
+    except Exception as e:
         logger.error(f"Connection error while creating resource '{resource_name}': {e}")
         return False
