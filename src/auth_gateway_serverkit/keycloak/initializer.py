@@ -18,7 +18,7 @@ logger = init_logger("serverkit.keycloak.initializer")
 
 async def check_keycloak_connection():
     try:
-        response = await get(settings.KEYCLOAK_URL)
+        response = await get(settings.SERVER_URL)
         logger.info(f"response: {response}")
         status = response.get('status')
         if status == 200:
