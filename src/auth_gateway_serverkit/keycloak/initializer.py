@@ -3,7 +3,6 @@ import json
 import asyncio
 import aiohttp
 from ..logger import init_logger
-from ..http_client import get
 from .config import settings
 from .manager import get_admin_token, get_client_uuid
 from .api import (
@@ -18,15 +17,14 @@ logger = init_logger("serverkit.keycloak.initializer")
 
 async def check_keycloak_connection():
     try:
-        response = await get(settings.SERVER_URL)
-        logger.info(f"response: {response}")
-        status = response.get('status')
-        if status == 200:
-            logger.info("Successfully connected to Keycloak server")
-            return True
-        else:
-            logger.error(f"Failed to connect to Keycloak server. Status: {status}")
-            return False
+        async with aiohttp.ClientSession() as session:
+            async with session.get(settings.SERVER_URL) as response:
+                if response.status == 200:
+                    logger.info("Successfully connected to Keycloak server")
+                    return True
+                else:
+                    logger.error(f"Failed to connect to Keycloak server. Status: {response.status}")
+                    return False
     except aiohttp.ClientError as e:
         logger.error(f"Failed to connect to Keycloak server: {e}")
         return False
