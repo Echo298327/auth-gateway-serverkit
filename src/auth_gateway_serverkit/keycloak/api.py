@@ -1,10 +1,125 @@
 import os
 import json
 from ..aiohttp_client import get, post, put, delete
+from typing import Optional
 from .config import settings
 from ..logger import init_logger
 
 logger = init_logger("serverkit.keycloak.api")
+
+
+async def retrieve_token(username: str, password: str) -> Optional[str]:
+    """
+    Retrieve an access token from Keycloak using username and password.
+    :param username: The username for authentication
+    :param password: The password for authentication
+    :return: Access token if successful, None otherwise
+    """
+    try:
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        body = {
+            "client_id": settings.CLIENT_ID,
+            # "client_secret": client_secret,
+            "scope": settings.SCOPE,
+            "username": username,
+            "password": password,
+            "grant_type": "password"
+        }
+        url = f"{settings.SERVER_URL}/realms/{settings.REALM}/protocol/openid-connect/token"
+        status, response_text, response_json = await post(url, data=body, headers=headers)
+        if status == 200:
+            token = response_json.get('access_token')
+            return token
+        else:
+            logger.error(f"Error retrieving token: {response_text}")
+            return None
+    except Exception as e:
+        logger.error(f"Error retrieving token: {e}")
+        return None
+
+
+async def get_admin_token() -> Optional[str]:
+    """
+    Retrieve an admin token from Keycloak master realm.
+    :return: Admin access token if successful, None otherwise
+    """
+    url = f"{settings.SERVER_URL}/realms/master/protocol/openid-connect/token"
+    payload = {
+        'username': settings.KC_BOOTSTRAP_ADMIN_USERNAME,
+        'password': settings.KC_BOOTSTRAP_ADMIN_PASSWORD,
+        'grant_type': 'password',
+        'client_id': 'admin-cli'
+    }
+    try:
+        status, response_text, data = await post(url, data=payload)
+        if status == 200:
+            return data['access_token']
+        else:
+            logger.error(f"Failed to get admin token. Status: {status}, Response: {response_text}")
+            return None
+    except Exception as e:
+        logger.error(f"Connection error while getting admin token: {e}")
+        return None
+
+
+async def get_client_uuid(admin_token: str) -> Optional[str]:
+    """
+    Retrieve the UUID of a client from Keycloak.
+    :param admin_token: Admin access token for authentication
+    :return: Client UUID if found, None otherwise
+    """
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients?clientId={settings.CLIENT_ID}"
+    headers = {'Authorization': f'Bearer {admin_token}', 'Content-Type': 'application/json'}
+    status, response_text, clients = await get(url, headers=headers)
+    if status == 200:
+        if clients:
+            return clients[0]['id']  # UUID of the client
+    logger.error(f"Failed to find client UUID for clientId '{settings.CLIENT_ID}'. Status: {status}")
+    return None
+
+
+async def get_client_secret() -> Optional[str]:
+    """
+    Retrieve the client secret from Keycloak.
+    :return: Client secret if successful, None otherwise
+    """
+    try:
+        # Step 1: Obtain the admin token
+        admin_token = await get_admin_token()
+        if not admin_token:
+            logger.error("Unable to obtain admin token.")
+            return None
+
+        # Step 2: Retrieve the client UUID using the existing get_client_uuid function
+        client_uuid = await get_client_uuid(admin_token)
+        if not client_uuid:
+            logger.error(f"Unable to retrieve UUID for client_id: {settings.CLIENT_ID}")
+            return None
+
+        # Step 3: Fetch the client secret using the client UUID
+        secret_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/client-secret"
+        headers = {
+            "Authorization": f"Bearer {admin_token}",
+            "Content-Type": "application/json"
+        }
+        status, response_text, secret_data = await get(secret_url, headers=headers)
+        if status == 200:
+            client_secret = secret_data.get('value')
+
+            if not client_secret:
+                logger.error("Client secret not found in the response.")
+                return None
+
+            return client_secret
+        else:
+            logger.error(f"Error fetching client secret: {response_text}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Exception occurred while retrieving client secret: {e}")
+        return None
 
 
 async def get_resource_id(resource_name, admin_token, client_uuid) -> str | None:

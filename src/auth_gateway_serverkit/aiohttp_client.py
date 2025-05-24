@@ -71,23 +71,49 @@ async def get(
 async def delete(
     url: str,
     params: Optional[dict] = None,
+    json: Optional[dict] = None,
+    data: Optional[dict] = None,
     headers: Optional[Dict[str, str]] = None,
     timeout: int = 20,
     connect: int = 5
 ) -> Tuple[int, str, dict]:
     """
     Make a DELETE request and return status code, response text, and JSON response.
+    :param url: The URL to send the request to
+    :param params: Optional query parameters
+    :param json: Optional JSON data to send in the request body
+    :param data: Optional form data to send in the request body
+    :param headers: Optional request headers
+    :param timeout: Request timeout in seconds
+    :param connect: Connection timeout in seconds
     :return: Tuple of (status_code, response_text, json_response)
     """
     timeout_obj = aiohttp.ClientTimeout(total=timeout, connect=connect)
     async with aiohttp.ClientSession(timeout=timeout_obj, headers=headers) as session:
-        async with session.delete(url, params=params) as response:
-            response_text = await response.text()
-            try:
-                json_response = await response.json()
-            except:
-                json_response = {}
-            return response.status, response_text, json_response
+        if json is not None:
+            async with session.delete(url, json=json, params=params) as response:
+                response_text = await response.text()
+                try:
+                    json_response = await response.json()
+                except:
+                    json_response = {}
+                return response.status, response_text, json_response
+        elif data is not None:
+            async with session.delete(url, data=data, params=params) as response:
+                response_text = await response.text()
+                try:
+                    json_response = await response.json()
+                except:
+                    json_response = {}
+                return response.status, response_text, json_response
+        else:
+            async with session.delete(url, params=params) as response:
+                response_text = await response.text()
+                try:
+                    json_response = await response.json()
+                except:
+                    json_response = {}
+                return response.status, response_text, json_response
 
 
 async def put(
