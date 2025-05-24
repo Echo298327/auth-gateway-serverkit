@@ -4,7 +4,7 @@ import asyncio
 import aiohttp
 from ..logger import init_logger
 from .config import settings
-from .manager import get_admin_token, get_client_uuid
+from .api import get_admin_token, get_client_uuid
 from .api import (
     create_realm, set_frontend_url, create_client, create_realm_roles, add_audience_protocol_mapper,
     enable_edit_username, remove_default_scopes, create_resource,
