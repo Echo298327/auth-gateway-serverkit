@@ -199,6 +199,7 @@ async def update_user_in_keycloak(
         password: str = None
 ):
     try:
+        user_needs_logout = False
         token = await get_admin_token()
         if not token:
             return {'status': 'error', 'message': "Error obtaining admin token"}
@@ -223,7 +224,7 @@ async def update_user_in_keycloak(
                 return {'status': 'error', 'message': "Error updating user in Keycloak"}
 
             # Step 2: Update User Roles (if roles provided)
-            if roles:
+            if roles is not None and len(roles) > 0:
                 # Retrieve current roles assigned to the user
                 current_roles_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm"
                 current_roles_response = await client.get(current_roles_url, headers=headers)
@@ -276,14 +277,13 @@ async def update_user_in_keycloak(
                         logger.error(f"Error removing roles: {remove_response.text}")
                         return {'status': 'error', 'message': "Error removing roles in Keycloak"}
 
-                logout_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/logout"
-                logout_response = await client.post(logout_url, headers=headers)
-                if logout_response.status_code != 204:
-                    logger.error(f"Error logging out user: {logout_response.text}")
-                    return {'status': 'error', 'message': "Error logging out user from Keycloak"}
+                if roles_to_add or roles_to_remove:
+                    user_needs_logout = True
 
             if password:
                 # Step 3: Update User Password
+                user_needs_logout = True
+
                 password_body = {
                     "type": "password",
                     "value": password,
@@ -294,6 +294,13 @@ async def update_user_in_keycloak(
                 if password_response.status_code != 204:
                     logger.error(f"Error updating user password: {password_response.text}")
                     return {'status': 'error', 'message': "Error updating user password in Keycloak"}
+
+            if user_needs_logout:
+                logout_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/logout"
+                logout_response = await client.post(logout_url, headers=headers)
+                if logout_response.status_code != 204:
+                    logger.error(f"Error logging out user: {logout_response.text}")
+                    return {'status': 'error', 'message': "Error logging out user from Keycloak"}
 
         return {'status': 'success'}
 
