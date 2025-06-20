@@ -1,3 +1,4 @@
+""" Email sending module for user notifications in KalSense."""
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart

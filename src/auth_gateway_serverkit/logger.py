@@ -1,3 +1,4 @@
+""" Logging configuration for the auth_gateway package."""
 import logging
 import json
 import sys

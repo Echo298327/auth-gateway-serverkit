@@ -1,13 +1,13 @@
+"""Keycloak server initialization module for the auth gateway serverkit."""
 import os
 import json
 import asyncio
 import aiohttp
 from ..logger import init_logger
 from .config import settings
-from .manager import get_admin_token, get_client_uuid
-from .api import (
-    create_realm, set_frontend_url, create_client, create_realm_roles, add_audience_protocol_mapper,
-    enable_edit_username, remove_default_scopes, create_resource,
+from .client_api import (
+    get_admin_token, get_client_uuid, create_realm, set_frontend_url, create_client, create_realm_roles,
+    add_audience_protocol_mapper, enable_edit_username, remove_default_scopes, create_resource,
     create_policy, create_permission, get_resource_id
 )
 

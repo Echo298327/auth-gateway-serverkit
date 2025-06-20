@@ -1,124 +1,13 @@
+""" Keycloak user API Module for the auth gateway serverkit."""
 import httpx
 import json
 import aiohttp
 from ..logger import init_logger
 from .config import settings
+from .client_api import get_admin_token
 
 
 logger = init_logger("serverkit.keycloak.manager")
-
-server_url = settings.SERVER_URL
-client_id = settings.CLIENT_ID
-realm = settings.REALM
-scope = settings.SCOPE
-admin_username = settings.KC_BOOTSTRAP_ADMIN_USERNAME
-admin_password = settings.KC_BOOTSTRAP_ADMIN_PASSWORD
-
-
-async def retrieve_token(username, password):
-    try:
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        body = {
-            "client_id": client_id,
-            # "client_secret": client_secret,
-            "scope": scope,
-            "username": username,
-            "password": password,
-            "grant_type": "password"
-        }
-        url = f"{server_url}/realms/{realm}/protocol/openid-connect/token"
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(url, data=body, headers=headers)
-            if response.status_code == 200:
-                token = response.json().get('access_token')
-                return token
-            else:
-                logger.error(f"Error retrieving token: {response.text}")
-                return None
-    except Exception as e:
-        logger.error(f"Error retrieving token: {e}")
-        return None
-
-
-async def get_admin_token():
-    url = f"{server_url}/realms/master/protocol/openid-connect/token"
-    payload = {
-        'username': admin_username,
-        'password': admin_password,
-        'grant_type': 'password',
-        'client_id': 'admin-cli'
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data['access_token']
-                else:
-                    logger.error(f"Failed to get admin token. Status: {response.status}, Response: {await response.text()}")
-                    return None
-    except aiohttp.ClientError as e:
-        logger.error(f"Connection error while getting admin token: {e}")
-        return None
-
-
-async def get_client_uuid(admin_token):
-    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients?clientId={settings.CLIENT_ID}"
-    headers = {'Authorization': f'Bearer {admin_token}', 'Content-Type': 'application/json'}
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            if response.status == 200:
-                clients = await response.json()
-                if clients:
-                    return clients[0]['id']  # UUID of the client
-            logger.error(f"Failed to find client UUID for clientId '{settings.CLIENT_ID}'. Status: {response.status}")
-            return None
-
-
-async def get_client_secret():
-    try:
-        # Step 1: Obtain the admin token
-        admin_token = await get_admin_token()
-        if not admin_token:
-            logger.error("Unable to obtain admin token.")
-            return None
-
-        # Step 2: Retrieve the client UUID using the existing get_client_uuid function
-        client_uuid = await get_client_uuid(admin_token)
-        if not client_uuid:
-            logger.error(f"Unable to retrieve UUID for client_id: {settings.CLIENT_ID}")
-            return None
-
-        # Step 3: Fetch the client secret using the client UUID
-        secret_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/client-secret"
-        headers = {
-            "Authorization": f"Bearer {admin_token}",
-            "Content-Type": "application/json"
-        }
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
-            async with session.get(secret_url, headers=headers) as secret_response:
-                if secret_response.status == 200:
-                    secret_data = await secret_response.json()
-                    client_secret = secret_data.get('value')
-
-                    if not client_secret:
-                        logger.error("Client secret not found in the response.")
-                        return None
-
-                    return client_secret
-                else:
-                    response_text = await secret_response.text()
-                    logger.error(f"Error fetching client secret: {response_text}")
-                    return None
-
-    except aiohttp.ClientError as e:
-        logger.error(f"HTTP ClientError occurred while retrieving client secret: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Exception occurred while retrieving client secret: {e}")
-        return None
 
 
 async def add_user_to_keycloak(user_name, first_name, last_name, email: str, password: str, role_list: list):
@@ -141,7 +30,7 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
             "email": email,
             "credentials": [{"type": "password", "value": password, "temporary": False}]
         }
-        url = f"{server_url}/admin/realms/{realm}/users"
+        url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users"
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(url, json=body, headers=headers)
             if response.status_code == 201:
@@ -152,7 +41,7 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
                 roles_to_assign = []
                 for role_name in role_list:
                     logger.info(f"Assigning role '{role_name}' to user '{user_name}'")
-                    roles_url = f"{server_url}/admin/realms/{realm}/roles/{role_name}"
+                    roles_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles/{role_name}"
                     role_response = await client.get(roles_url, headers=headers)
                     if role_response.status_code == 200:
                         role = role_response.json()
@@ -161,14 +50,14 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
                             "name": role['name'],
                             "composite": role.get('composite', False),
                             "clientRole": role.get('clientRole', False),
-                            "containerId": role.get('containerId', realm)
+                            "containerId": role.get('containerId', settings.REALM)
                         })
                     else:
                         logger.error(f"Error retrieving role '{role_name}': {role_response.text}")
                         return {'status': 'error', 'message': f"Error retrieving role '{role_name}' from Keycloak", "keycloakUserId": user_uuid}
 
                 # Assign the roles to the user
-                role_mapping_url = f"{server_url}/admin/realms/{realm}/users/{user_uuid}/role-mappings/realm"
+                role_mapping_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_uuid}/role-mappings/realm"
                 assign_role_response = await client.post(
                     role_mapping_url,
                     json=roles_to_assign,
@@ -217,7 +106,7 @@ async def update_user_in_keycloak(
                 "lastName": last_name,
                 "email": email
             }
-            url = f"{server_url}/admin/realms/{realm}/users/{user_id}"
+            url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}"
             response = await client.put(url, json=body, headers=headers)
             if response.status_code != 204:
                 logger.error(f"Error updating user in Keycloak: {response.text}")
@@ -226,7 +115,7 @@ async def update_user_in_keycloak(
             # Step 2: Update User Roles (if roles provided)
             if roles is not None and len(roles) > 0:
                 # Retrieve current roles assigned to the user
-                current_roles_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm"
+                current_roles_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/role-mappings/realm"
                 current_roles_response = await client.get(current_roles_url, headers=headers)
                 if current_roles_response.status_code != 200:
                     logger.error(f"Error fetching current roles for user: {current_roles_response.text}")
@@ -242,7 +131,7 @@ async def update_user_in_keycloak(
                 # Add new roles
                 roles_to_add_details = []
                 for role_name in roles_to_add:
-                    role_url = f"{server_url}/admin/realms/{realm}/roles/{role_name}"
+                    role_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles/{role_name}"
                     role_response = await client.get(role_url, headers=headers)
                     if role_response.status_code == 200:
                         role = role_response.json()
@@ -255,7 +144,7 @@ async def update_user_in_keycloak(
                         return {'status': 'error', 'message': f"Error retrieving role '{role_name}' from Keycloak"}
 
                 if roles_to_add_details:
-                    assign_roles_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm"
+                    assign_roles_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/role-mappings/realm"
                     assign_response = await client.post(assign_roles_url, json=roles_to_add_details, headers=headers)
                     if assign_response.status_code != 204:
                         logger.error(f"Error assigning roles: {assign_response.text}")
@@ -266,7 +155,7 @@ async def update_user_in_keycloak(
                     role for role in current_roles if role["name"] in roles_to_remove
                 ]
                 if roles_to_remove_details:
-                    remove_roles_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm"
+                    remove_roles_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/role-mappings/realm"
                     remove_response = await client.request(
                         method="DELETE",
                         url=remove_roles_url,
@@ -289,14 +178,14 @@ async def update_user_in_keycloak(
                     "value": password,
                     "temporary": False
                 }
-                password_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/reset-password"
+                password_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/reset-password"
                 password_response = await client.put(password_url, json=password_body, headers=headers)
                 if password_response.status_code != 204:
                     logger.error(f"Error updating user password: {password_response.text}")
                     return {'status': 'error', 'message': "Error updating user password in Keycloak"}
 
             if user_needs_logout:
-                logout_url = f"{server_url}/admin/realms/{realm}/users/{user_id}/logout"
+                logout_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/logout"
                 logout_response = await client.post(logout_url, headers=headers)
                 if logout_response.status_code != 204:
                     logger.error(f"Error logging out user: {logout_response.text}")
@@ -317,7 +206,7 @@ async def delete_user_from_keycloak(user_id):
         headers = {
             "Authorization": f"Bearer {token}"
         }
-        url = f"{server_url}/admin/realms/{realm}/users/{user_id}"
+        url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}"
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.delete(url, headers=headers)
             if response.status_code == 204:
@@ -365,7 +254,7 @@ async def execute_actions_email(
     # You can append redirectUri and clientId if they are needed
     if redirect_uri:
         params["redirectUri"] = redirect_uri
-    if client_id:
+    if settings.CLIENT_ID:
         params["clientId"] = settings.CLIENT_ID
 
     async with aiohttp.ClientSession() as session:
@@ -377,45 +266,3 @@ async def execute_actions_email(
                 error_text = await response.text()
                 logger.error(f"Failed to trigger email action. Status: {response.status}, Response: {error_text}")
                 return False
-
-
-async def retrieve_client_token(user_name, password):
-    """
-    Retrieve a token from Keycloak using the Resource Owner Password Credentials Grant.
-
-    Args:
-        user_name (str): The username of the user.
-        password (str): The password of the user.
-
-    Returns:
-        dict: A dictionary containing the access token and other token details.
-    """
-    try:
-        if settings.CLIENT_SECRET:
-            client_secret = settings.CLIENT_SECRET
-        else:
-            logger.info("Fetching client secret from Keycloak")
-            client_secret = await get_client_secret()
-            settings.CLIENT_SECRET = client_secret
-            if not client_secret:
-                logger.error("Failed to get client secret")
-                return None
-
-        url = f"{server_url}/realms/{realm}/protocol/openid-connect/token"
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        payload = {
-            "username": user_name,
-            "password": password,
-            "grant_type": "password",
-            "scope": "openid",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(url, data=payload, headers=headers)
-            return response
-    except Exception as e:
-        logger.error(f"Request error: {e}")
-        return None

@@ -1,3 +1,4 @@
+""" Request handler for FastAPI applications."""
 from typing import Any, Tuple, Optional, Dict
 from fastapi import Request, status
 from pydantic import ValidationError
@@ -81,6 +82,7 @@ async def parse_form_request(request):
 
 
 async def get_request_user(request: Request) -> Dict[str, Any]:
+    """Get user information from request headers."""
     str_user = request.headers.get("x-user")
     if str_user:
         user = json.loads(str_user)

@@ -1,8 +1,18 @@
+""" password generation module."""
 import string
 import secrets
 
 
 def generate_password():
+    """
+    Generate a random password that meets the following criteria:
+    - At least one lowercase letter
+    - At least one uppercase letter
+    - At least one digit
+    - At least one special character from the set !?#$%&
+    - Total length of 10 characters
+    :return: A randomly generated password that meets the criteria.
+    """
     allowed_symbols = "!?#$%&"
     alphabet = string.ascii_letters + string.digits + allowed_symbols
     while True:

@@ -1,3 +1,4 @@
+""" http client utilities for making asynchronous HTTP requests using httpx. """
 import httpx
 from typing import Optional, Dict
 from .logger import init_logger

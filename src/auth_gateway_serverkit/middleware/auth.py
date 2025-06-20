@@ -1,10 +1,11 @@
+"""Keycloak auth middleware for FastAPI applications."""
 from fastapi import HTTPException, Request, Depends, status
 from typing import Callable, Any
 from functools import wraps
 from fastapi.security import OAuth2PasswordBearer
 from keycloak import KeycloakOpenID
 from .config import settings as auth_settings
-from ..keycloak.manager import get_client_secret
+from ..keycloak.client_api import get_client_secret
 from .schemas import UserPayload
 import requests
 import jwt
