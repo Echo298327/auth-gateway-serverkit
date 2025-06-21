@@ -551,7 +551,7 @@ async def create_policy(policy_name, description, roles, admin_token, client_uui
         "name": policy_name,
         "description": description,
         "logic": "POSITIVE",
-        "roles": [{"id": role} for role in roles]
+        "roles": [{"name": role, "required": False} for role in roles]
     }
     try:
         async with aiohttp.ClientSession() as session:
@@ -643,3 +643,6 @@ async def create_resource(resource_name, display_name, url,admin_token, client_u
     except aiohttp.ClientError as e:
         logger.error(f"Connection error while creating resource '{resource_name}': {e}")
         return False
+
+
+
