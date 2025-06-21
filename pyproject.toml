@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auth_gateway_serverkit"
-version = "0.0.0"
+version = "0.0.62"
 authors = [
     { name = "Echo298327", email = "shalomber17@gmail.com" }
 ]
