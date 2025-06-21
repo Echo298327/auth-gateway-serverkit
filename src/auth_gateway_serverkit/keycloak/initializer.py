@@ -146,7 +146,7 @@ async def initialize_keycloak_server(max_retries=30, retry_delay=5, cleanup_and_
     for attempt in range(1, max_retries + 1):
         if await check_keycloak_connection():
             break
-        logger.warning(f"Attempt {attempt}/{max_retries} failed. Retrying in {retry_delay}s…")
+        logger.warning(f"Attempt {attempt}/{max_retries} failed. Retrying in {retry_delay}s")
         await asyncio.sleep(retry_delay)
     else:
         logger.error("Failed to initialize Keycloak after multiple attempts")
