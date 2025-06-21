@@ -333,7 +333,6 @@ async def create_realm(admin_token) -> bool:
                     logger.info(f"Realm '{settings.REALM}' created successfully")
                     return True
                 elif response.status == 409:
-                    logger.info(f"Realm '{settings.REALM}' already exists")
                     return True
                 else:
                     logger.error(f"Failed to create realm. Status: {response.status}, Response: {await response.text()}")
@@ -378,7 +377,6 @@ async def create_client(admin_token) -> bool:
                     logger.info(f"Client '{settings.CLIENT_ID}' created successfully")
                     return True
                 elif response.status == 409:
-                    logger.info(f"Client '{settings.CLIENT_ID}' already exists")
                     return True
                 else:
                     logger.error(f"Failed to create client. Status: {response.status}, Response: {await response.text()}")
@@ -427,7 +425,7 @@ async def create_realm_roles(admin_token) -> bool:
                     if response.status == 201:
                         logger.info(f"Role '{role['name']}' created successfully in realm '{settings.REALM}'")
                     elif response.status == 409:
-                        logger.info(f"Role '{role['name']}' already exists in realm '{settings.REALM}'")
+                        pass  # Role already exists
                         # Optionally update the role description if it already exists
                         # await update_role_description(role['name'], role.get('description', ''), headers)
                     else:
@@ -521,7 +519,6 @@ async def add_audience_protocol_mapper(admin_token) -> bool:
                     logger.info(f"Audience Protocol Mapper added successfully to client '{settings.CLIENT_ID}'")
                     return True
                 elif response.status == 409:
-                    logger.info(f"Audience Protocol Mapper already exists for client '{settings.CLIENT_ID}'")
                     return True
                 else:
                     logger.error(f"Failed to add Audience Protocol Mapper. Status: {response.status}, Response: {await response.text()}")
@@ -531,16 +528,53 @@ async def add_audience_protocol_mapper(admin_token) -> bool:
         return False
 
 
+async def get_role_ids_by_names(role_names, admin_token) -> list:
+    """
+    Get role IDs by role names from Keycloak.
+    :param role_names: List of role names
+    :param admin_token: Admin token for authentication
+    :return: List of role IDs
+    """
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    role_ids = []
+    for role_name in role_names:
+        url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles/{role_name}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        role_data = await response.json()
+                        role_ids.append(role_data['id'])
+                    else:
+                        logger.error(f"Failed to get role ID for '{role_name}'. Status: {response.status}")
+                        return []
+        except aiohttp.ClientError as e:
+            logger.error(f"Connection error while getting role ID for '{role_name}': {e}")
+            return []
+    
+    return role_ids
+
+
 async def create_policy(policy_name, description, roles, admin_token, client_uuid) -> bool:
     """
     Create a new policy in Keycloak.
     :param policy_name:
     :param description:
-    :param roles:
+    :param roles: List of role names
     :param admin_token:
     :param client_uuid:
     :return: True if successful, False otherwise
     """
+    
+    # Convert role names to role IDs
+    role_ids = await get_role_ids_by_names(roles, admin_token)
+    if not role_ids:
+        logger.error(f"Failed to get role IDs for policy '{policy_name}'")
+        return False
 
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -551,18 +585,16 @@ async def create_policy(policy_name, description, roles, admin_token, client_uui
         "name": policy_name,
         "description": description,
         "logic": "POSITIVE",
-        "roles": [{"name": role, "required": False} for role in roles]
+        "roles": [{"id": role_id} for role_id in role_ids]
     }
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Policy '{policy_name}' created successfully")
-                elif response.status == 409:
-                    logger.info(f"Policy '{policy_name}' already exists")
+                if response.status == 201 or response.status == 409:
+                    return True
                 else:
                     logger.error(f"Failed to create policy '{policy_name}'. Status: {response.status}, Response: {await response.text()}")
-                return response.status == 201 or response.status == 409
+                    return False
     except aiohttp.ClientError as e:
         logger.error(f"Connection error while creating policy '{policy_name}': {e}")
         return False
@@ -595,13 +627,11 @@ async def create_permission(permission_name, description, policies, resource_ids
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Permission '{permission_name}' created successfully")
-                elif response.status == 409:
-                    logger.info(f"Permission '{permission_name}' already exists")
+                if response.status == 201 or response.status == 409:
+                    return True
                 else:
                     logger.error(f"Failed to create permission '{permission_name}'. Status: {response.status}, Response: {await response.text()}")
-                return response.status == 201 or response.status == 409
+                    return False
     except aiohttp.ClientError as e:
         logger.error(f"Connection error while creating permission '{permission_name}': {e}")
         return False
@@ -633,13 +663,11 @@ async def create_resource(resource_name, display_name, url,admin_token, client_u
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(resource_url, headers=headers, json=payload) as response:
-                if response.status == 201:
-                    logger.info(f"Resource '{resource_name}' created successfully")
-                elif response.status == 409:
-                    logger.info(f"Resource '{resource_name}' already exists")
+                if response.status == 201 or response.status == 409:
+                    return True
                 else:
                     logger.error(f"Failed to create resource '{resource_name}'. Status: {response.status}, Response: {await response.text()}")
-                return response.status == 201 or response.status == 409
+                    return False
     except aiohttp.ClientError as e:
         logger.error(f"Connection error while creating resource '{resource_name}': {e}")
         return False
