@@ -33,32 +33,77 @@ async def check_keycloak_connection():
 
 async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     """
-    Process keycloak_config.json to create/update authorization configuration.
+    Process authorization configuration from multiple files:
+    - roles.json: Contains realm_roles and policies (global/shared)
+    - services/*.json: Contains resources and permissions (service-specific)
     
     :param admin_token: Admin token for authentication
     :param client_uuid: Client UUID
     :param cleanup_and_build: Whether to delete existing configuration before creating new one
     :return: True if successful, False otherwise
     """
-    config_path = os.path.join(os.getcwd(), "keycloak_config.json")
-    if not os.path.exists(config_path):
-        logger.error("Configuration file not found")
+    authorization_dir = os.path.join(os.getcwd(), "authorization")
+    services_dir = os.path.join(authorization_dir, "services")
+    
+    # Check if authorization directory exists
+    if not os.path.exists(authorization_dir):
+        logger.error("Authorization directory not found")
         return False
 
-    with open(config_path, 'r') as file:
-        config = json.load(file)
+    # Load global configuration (roles and policies)
+    roles_file = os.path.join(authorization_dir, "roles.json")
+    if not os.path.exists(roles_file):
+        logger.error("roles.json file not found")
+        return False
+
+    with open(roles_file, 'r') as file:
+        global_config = json.load(file)
+
+    # Load service-specific configurations (resources and permissions)
+    service_configs = []
+    if os.path.exists(services_dir):
+        for filename in os.listdir(services_dir):
+            if filename.endswith('.json'):
+                service_file = os.path.join(services_dir, filename)
+                with open(service_file, 'r') as file:
+                    service_config = json.load(file)
+                    service_configs.append({
+                        'name': filename[:-5],  # Remove .json extension
+                        'config': service_config
+                    })
+                logger.info(f"Loaded service configuration: {filename}")
+
+    # Combine configurations
+    combined_config = {
+        "realm_roles": global_config.get("realm_roles", []),
+        "policies": global_config.get("policies", []),
+        "resources": [],
+        "permissions": []
+    }
+
+    # Collect resources and permissions from all service files
+    for service in service_configs:
+        service_resources = service['config'].get("resources", [])
+        service_permissions = service['config'].get("permissions", [])
+        
+        combined_config["resources"].extend(service_resources)
+        combined_config["permissions"].extend(service_permissions)
+        
+        logger.info(f"Added {len(service_resources)} resources and {len(service_permissions)} permissions from {service['name']} service")
+
+    logger.info(f"Combined configuration: {len(combined_config['realm_roles'])} roles, {len(combined_config['policies'])} policies, {len(combined_config['resources'])} resources, {len(combined_config['permissions'])} permissions")
 
     # Step 1: Cleanup existing configuration if requested
     if cleanup_and_build:
         logger.info("Starting cleanup of existing authorization configuration...")
-        cleanup_success = await cleanup_authorization_config(config, admin_token, client_uuid)
+        cleanup_success = await cleanup_authorization_config(combined_config, admin_token, client_uuid)
         if not cleanup_success:
             logger.error("Failed to cleanup existing configuration")
             return False
 
         # Step 2: Create resources and collect their IDs
         resource_ids = {}
-        resources_to_create = config.get("resources", [])
+        resources_to_create = combined_config.get("resources", [])
         if resources_to_create:
             logger.info(f"Creating {len(resources_to_create)} resources...")
             for resource in resources_to_create:
@@ -83,7 +128,7 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
             logger.info("All resources created successfully")
 
         # Step 3: Create policies
-        policies_to_create = config.get("policies", [])
+        policies_to_create = combined_config.get("policies", [])
         if policies_to_create:
             logger.info(f"Creating {len(policies_to_create)} policies...")
             for policy in policies_to_create:
@@ -100,7 +145,7 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
             logger.info("All policies created successfully")
 
         # Step 4: Create permissions and associate them with resources
-        permissions_to_create = config.get("permissions", [])
+        permissions_to_create = combined_config.get("permissions", [])
         if permissions_to_create:
             logger.info(f"Creating {len(permissions_to_create)} permissions...")
             for permission in permissions_to_create:

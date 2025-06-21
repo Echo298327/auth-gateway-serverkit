@@ -388,16 +388,18 @@ async def create_client(admin_token) -> bool:
 
 async def create_realm_roles(admin_token) -> bool:
     """
-    Create realm roles in Keycloak based on the configuration file.
+    Create realm roles in Keycloak based on the authorization configuration.
     :param admin_token:
     :return: True if successful, False otherwise
     """
-    config_path = os.path.join(os.getcwd(), "keycloak_config.json")
-    if not os.path.exists(config_path):
-        logger.error("Configuration file not found")
+    authorization_dir = os.path.join(os.getcwd(), "authorization")
+    roles_file = os.path.join(authorization_dir, "roles.json")
+    
+    if not os.path.exists(roles_file):
+        logger.error("roles.json file not found in authorization directory")
         return False
 
-    with open(config_path, 'r') as file:
+    with open(roles_file, 'r') as file:
         config = json.load(file)
 
     roles_to_create = config.get("realm_roles", [])
