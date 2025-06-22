@@ -82,14 +82,34 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     }
 
     # Collect resources and permissions from all service files
+    # Use a dictionary to merge permissions with same names
+    permission_map = {}
+    
     for service in service_configs:
         service_resources = service['config'].get("resources", [])
         service_permissions = service['config'].get("permissions", [])
         
+        # Add resources directly
         combined_config["resources"].extend(service_resources)
-        combined_config["permissions"].extend(service_permissions)
+        
+        # Merge permissions with same names
+        for permission in service_permissions:
+            perm_name = permission['name']
+            if perm_name in permission_map:
+                # Merge resources from same-named permission
+                existing_resources = set(permission_map[perm_name]['resources'])
+                new_resources = set(permission.get('resources', []))
+                permission_map[perm_name]['resources'] = list(existing_resources.union(new_resources))
+                logger.info(f"Merged permission '{perm_name}' with additional resources from {service['name']} service")
+            else:
+                # Add new permission
+                permission_map[perm_name] = permission.copy()
+                logger.info(f"Added permission '{perm_name}' from {service['name']} service")
         
         logger.info(f"Added {len(service_resources)} resources and {len(service_permissions)} permissions from {service['name']} service")
+    
+    # Convert permission map back to list
+    combined_config["permissions"] = list(permission_map.values())
 
     logger.info(f"Combined configuration: {len(combined_config['realm_roles'])} roles, {len(combined_config['policies'])} policies, {len(combined_config['resources'])} resources, {len(combined_config['permissions'])} permissions")
 
