@@ -31,11 +31,42 @@ async def check_keycloak_connection():
         return False
 
 
+def create_dynamic_permission_name(policies):
+    """
+    Create a clean, short permission name from any policy names dynamically.
+    Works with any policy naming convention without hardcoding.
+    """
+    if len(policies) == 1:
+        # Single policy: remove common suffixes and make it clean
+        name = policies[0]
+        # Remove common suffixes like "-Access", "-Policy", etc.
+        for suffix in ['-Access', '-Policy', '-Permission', '_Access', '_Policy', '_Permission']:
+            name = name.replace(suffix, '')
+        # Convert to lowercase and replace underscores with dashes
+        name = name.replace('_', '-').lower()
+        return name
+    else:
+        # Multiple policies: combine them cleanly
+        clean_names = []
+        for policy in sorted(policies):  # Sort for consistency
+            name = policy
+            # Remove common suffixes
+            for suffix in ['-Access', '-Policy', '-Permission', '_Access', '_Policy', '_Permission']:
+                name = name.replace(suffix, '')
+            # Convert to lowercase and replace underscores with dashes
+            name = name.replace('_', '-').lower()
+            clean_names.append(name)
+        return '-'.join(clean_names)
+
+
 async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     """
     Process authorization configuration from multiple files:
     - roles.json: Contains realm_roles and policies (global/shared)
     - services/*.json: Contains resources and permissions (service-specific)
+    
+    This function ensures proper Keycloak permissions configuration by creating only one 
+    permission per resource with all relevant policies combined to avoid implicit AND logic.
     
     :param admin_token: Admin token for authentication
     :param client_uuid: Client UUID
@@ -81,37 +112,67 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
         "permissions": []
     }
 
-    # Collect resources and permissions from all service files
-    # Use a dictionary to merge permissions with same names
-    permission_map = {}
-    
+    # Collect resources from all service files
     for service in service_configs:
         service_resources = service['config'].get("resources", [])
+        combined_config["resources"].extend(service_resources)
+        logger.info(f"Added {len(service_resources)} resources from {service['name']} service")
+
+    # CRITICAL FIX: Handle overlapping resources by merging their policies
+    # First collect all resources and their associated policies
+    resource_policies_map = {}
+    
+    for service in service_configs:
         service_permissions = service['config'].get("permissions", [])
         
-        # Add resources directly
-        combined_config["resources"].extend(service_resources)
-        
-        # Merge permissions with same names
         for permission in service_permissions:
-            perm_name = permission['name']
-            if perm_name in permission_map:
-                # Merge resources from same-named permission
-                existing_resources = set(permission_map[perm_name]['resources'])
-                new_resources = set(permission.get('resources', []))
-                permission_map[perm_name]['resources'] = list(existing_resources.union(new_resources))
-                logger.info(f"Merged permission '{perm_name}' with additional resources from {service['name']} service")
-            else:
-                # Add new permission
-                permission_map[perm_name] = permission.copy()
-                logger.info(f"Added permission '{perm_name}' from {service['name']} service")
-        
-        logger.info(f"Added {len(service_resources)} resources and {len(service_permissions)} permissions from {service['name']} service")
-    
-    # Convert permission map back to list
-    combined_config["permissions"] = list(permission_map.values())
+            perm_policies = permission.get('policies', [])
+            perm_resources = permission.get('resources', [])
+            
+            # For each resource, collect ALL policies that should apply to it
+            for resource_name in perm_resources:
+                if resource_name not in resource_policies_map:
+                    resource_policies_map[resource_name] = set()
+                
+                resource_policies_map[resource_name].update(perm_policies)
 
-    logger.info(f"Combined configuration: {len(combined_config['realm_roles'])} roles, {len(combined_config['policies'])} policies, {len(combined_config['resources'])} resources, {len(combined_config['permissions'])} permissions")
+    # Now group resources by their FINAL combined policy set
+    policy_to_resources_map = {}
+    
+    for resource_name, policies in resource_policies_map.items():
+        policies_key = tuple(sorted(policies))  # Create unique key for this policy combination
+        
+        if policies_key not in policy_to_resources_map:
+            policy_to_resources_map[policies_key] = {
+                'policies': list(policies),
+                'resources': []
+            }
+        
+        policy_to_resources_map[policies_key]['resources'].append(resource_name)
+
+    # Create permissions by FINAL POLICY COMBINATION
+    consolidated_permissions = []
+    for i, (policies_key, policy_info) in enumerate(policy_to_resources_map.items(), 1):
+        policies = policy_info['policies']
+        resources = policy_info['resources']
+        
+        # Create dynamic permission name that works with any policy names
+        permission_name = create_dynamic_permission_name(policies)
+        
+        consolidated_permission = {
+            'name': permission_name,
+            'description': f"Access permission for {', '.join(policies)}",
+            'policies': policies,
+            'resources': resources
+        }
+        
+        consolidated_permissions.append(consolidated_permission)
+
+    # Update combined config with consolidated permissions
+    combined_config["permissions"] = consolidated_permissions
+
+    logger.info(f"Combined configuration: {len(combined_config['realm_roles'])} roles, {len(combined_config['policies'])} policies, {len(combined_config['resources'])} resources, {len(consolidated_permissions)} consolidated permissions")
+    logger.info("Applied Keycloak permissions fix: one permission per resource with combined policies for OR-based access control")
 
     # Step 1: Cleanup existing configuration if requested
     if cleanup_and_build:
@@ -164,17 +225,17 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
                     return False
             logger.info("All policies created successfully")
 
-        # Step 4: Create permissions and associate them with resources
+        # Step 4: Create consolidated permissions (one per resource with combined policies)
         permissions_to_create = combined_config.get("permissions", [])
         if permissions_to_create:
-            logger.info(f"Creating {len(permissions_to_create)} permissions...")
+            logger.info(f"Creating {len(permissions_to_create)} consolidated permissions...")
             for permission in permissions_to_create:
                 resource_names = permission.get('resources', [])
                 if not resource_names:
                     logger.error(f"No resources specified for permission '{permission['name']}'")
                     return False
 
-                # Get resource IDs for all associated resources
+                # Get resource IDs for all associated resources (should be only one per permission now)
                 resource_ids_list = [resource_ids.get(name) for name in resource_names]
                 if None in resource_ids_list:
                     missing_resources = [name for name, rid in zip(resource_names, resource_ids_list) if rid is None]
@@ -184,17 +245,17 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
                 success = await create_permission(
                     permission['name'],
                     permission['description'],
-                    permission['policies'],
-                    resource_ids_list,  # Pass list of resource IDs
+                    permission['policies'],  # Combined policies for OR-based logic
+                    resource_ids_list,
                     admin_token,
                     client_uuid
                 )
                 if not success:
                     logger.error(f"Failed to create permission: {permission['name']}")
                     return False
-            logger.info("All permissions created successfully")
+            logger.info("All consolidated permissions created successfully")
 
-    logger.info("Authorization configuration processed successfully")
+    logger.info("Authorization configuration processed successfully with proper OR-based permission logic")
     return True
 
 

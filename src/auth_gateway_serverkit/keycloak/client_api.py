@@ -604,13 +604,15 @@ async def create_policy(policy_name, description, roles, admin_token, client_uui
 
 async def create_permission(permission_name, description, policies, resource_ids, admin_token, client_uuid) -> bool:
     """
-    Create a new permission in Keycloak.
-    :param permission_name:
-    :param description:
-    :param policies:
-    :param resource_ids:
-    :param admin_token:
-    :param client_uuid:
+    Create a new permission in Keycloak with Affirmative decision strategy for OR-based logic.
+    This ensures that access is granted if ANY of the associated policies evaluate to PERMIT.
+    
+    :param permission_name: Name of the permission
+    :param description: Description of the permission
+    :param policies: List of policy names to associate with this permission
+    :param resource_ids: List of resource IDs this permission applies to
+    :param admin_token: Admin token for authentication
+    :param client_uuid: Client UUID
     :return: True if successful, False otherwise
     """
 
@@ -624,7 +626,8 @@ async def create_permission(permission_name, description, policies, resource_ids
         "description": description,
         "type": "resource",
         "resources": resource_ids,
-        "policies": policies
+        "policies": policies,
+        "decisionStrategy": "AFFIRMATIVE"  # Explicit OR logic: grant access if ANY policy permits
     }
     try:
         async with aiohttp.ClientSession() as session:
