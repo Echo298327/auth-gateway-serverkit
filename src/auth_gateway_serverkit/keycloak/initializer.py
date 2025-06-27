@@ -11,6 +11,7 @@ from .client_api import (
     create_policy, create_permission, get_resource_id
 )
 from .cleanup_api import cleanup_authorization_config
+from .utils import create_dynamic_permission_name
 
 
 logger = init_logger("serverkit.keycloak.initializer")
@@ -31,43 +32,15 @@ async def check_keycloak_connection():
         return False
 
 
-def create_dynamic_permission_name(policies):
-    """
-    Create a clean, short permission name from any policy names dynamically.
-    Works with any policy naming convention without hardcoding.
-    """
-    if len(policies) == 1:
-        # Single policy: remove common suffixes and make it clean
-        name = policies[0]
-        # Remove common suffixes like "-Access", "-Policy", etc.
-        for suffix in ['-Access', '-Policy', '-Permission', '_Access', '_Policy', '_Permission']:
-            name = name.replace(suffix, '')
-        # Convert to lowercase and replace underscores with dashes
-        name = name.replace('_', '-').lower()
-        return name
-    else:
-        # Multiple policies: combine them cleanly
-        clean_names = []
-        for policy in sorted(policies):  # Sort for consistency
-            name = policy
-            # Remove common suffixes
-            for suffix in ['-Access', '-Policy', '-Permission', '_Access', '_Policy', '_Permission']:
-                name = name.replace(suffix, '')
-            # Convert to lowercase and replace underscores with dashes
-            name = name.replace('_', '-').lower()
-            clean_names.append(name)
-        return '-'.join(clean_names)
-
-
 async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     """
     Process authorization configuration from multiple files:
     - roles.json: Contains realm_roles and policies (global/shared)
     - services/*.json: Contains resources and permissions (service-specific)
-    
-    This function ensures proper Keycloak permissions configuration by creating only one 
+
+    This function ensures proper Keycloak permissions configuration by creating only one
     permission per resource with all relevant policies combined to avoid implicit AND logic.
-    
+
     :param admin_token: Admin token for authentication
     :param client_uuid: Client UUID
     :param cleanup_and_build: Whether to delete existing configuration before creating new one
@@ -75,7 +48,7 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     """
     authorization_dir = os.path.join(os.getcwd(), "authorization")
     services_dir = os.path.join(authorization_dir, "services")
-    
+
     # Check if authorization directory exists
     if not os.path.exists(authorization_dir):
         logger.error("Authorization directory not found")
@@ -121,33 +94,33 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     # CRITICAL FIX: Handle overlapping resources by merging their policies
     # First collect all resources and their associated policies
     resource_policies_map = {}
-    
+
     for service in service_configs:
         service_permissions = service['config'].get("permissions", [])
-        
+
         for permission in service_permissions:
             perm_policies = permission.get('policies', [])
             perm_resources = permission.get('resources', [])
-            
+
             # For each resource, collect ALL policies that should apply to it
             for resource_name in perm_resources:
                 if resource_name not in resource_policies_map:
                     resource_policies_map[resource_name] = set()
-                
+
                 resource_policies_map[resource_name].update(perm_policies)
 
     # Now group resources by their FINAL combined policy set
     policy_to_resources_map = {}
-    
+
     for resource_name, policies in resource_policies_map.items():
         policies_key = tuple(sorted(policies))  # Create unique key for this policy combination
-        
+
         if policies_key not in policy_to_resources_map:
             policy_to_resources_map[policies_key] = {
                 'policies': list(policies),
                 'resources': []
             }
-        
+
         policy_to_resources_map[policies_key]['resources'].append(resource_name)
 
     # Create permissions by FINAL POLICY COMBINATION
@@ -155,24 +128,23 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     for i, (policies_key, policy_info) in enumerate(policy_to_resources_map.items(), 1):
         policies = policy_info['policies']
         resources = policy_info['resources']
-        
+
         # Create dynamic permission name that works with any policy names
         permission_name = create_dynamic_permission_name(policies)
-        
+
         consolidated_permission = {
             'name': permission_name,
             'description': f"Access permission for {', '.join(policies)}",
             'policies': policies,
             'resources': resources
         }
-        
+
         consolidated_permissions.append(consolidated_permission)
 
     # Update combined config with consolidated permissions
     combined_config["permissions"] = consolidated_permissions
 
     logger.info(f"Combined configuration: {len(combined_config['realm_roles'])} roles, {len(combined_config['policies'])} policies, {len(combined_config['resources'])} resources, {len(consolidated_permissions)} consolidated permissions")
-    logger.info("Applied Keycloak permissions fix: one permission per resource with combined policies for OR-based access control")
 
     # Step 1: Cleanup existing configuration if requested
     if cleanup_and_build:
@@ -262,7 +234,7 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
 async def initialize_keycloak_server(max_retries=30, retry_delay=5, cleanup_and_build=True):
     """
     Initialize Keycloak server with realm, client, and authorization configuration.
-    
+
     :param max_retries: Maximum number of connection retry attempts
     :param retry_delay: Delay between retry attempts in seconds
     :param cleanup_and_build: Whether to delete existing authorization config before creating new one
