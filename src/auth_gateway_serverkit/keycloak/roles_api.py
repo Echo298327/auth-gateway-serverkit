@@ -1,6 +1,6 @@
 """Keycloak roles API module for managing roles in Keycloak"""
 import httpx
-from config import settings
+from .config import settings
 from ..logger import init_logger
 from .client_api import get_admin_token
 
