@@ -1,10 +1,9 @@
 """ Logging configuration for the auth_gateway package."""
 import logging
-import json
 import sys
 
 
-class JsonFormatter(logging.Formatter):
+class SimpleFormatter(logging.Formatter):
     # ANSI escape codes for colors
     COLORS = {
         "ERROR": "\033[91m",  # Red
@@ -20,21 +19,15 @@ class JsonFormatter(logging.Formatter):
         super().__init__(datefmt=datefmt)
 
     def format(self, record):
-        log_message = {
-            "time": self.formatTime(record, self.datefmt),
-            "name": record.name,
-            "level": record.levelname,
-            "message": record.getMessage()
-        }
-
-        if record.levelno >= logging.ERROR:
-            log_message.update({
-                "line": record.lineno,
-            })
+        timestamp = self.formatTime(record, self.datefmt)
+        level = record.levelname
+        name = record.name
+        message = record.getMessage()
 
         # Apply color based on log level
         color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
-        return f"{color}{json.dumps(log_message)}{self.COLORS['RESET']}"
+        formatted_message = f"[{timestamp}] {level} | {name} | {message}"
+        return f"{color}{formatted_message}{self.COLORS['RESET']}"
 
 
 def init_logger(name):
@@ -42,6 +35,6 @@ def init_logger(name):
     logger.setLevel(logging.INFO)
     if not logger.handlers:
         stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(JsonFormatter())
+        stream_handler.setFormatter(SimpleFormatter())
         logger.addHandler(stream_handler)
     return logger
