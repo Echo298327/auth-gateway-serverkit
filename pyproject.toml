@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auth_gateway_serverkit"
-version = "0.0.71"
+version = "0.0.72"
 authors = [
     { name = "Echo298327", email = "shalomber17@gmail.com" }
 ]
@@ -27,6 +27,7 @@ dependencies = [
     'python-keycloak==3.9.1',
     'PyJWT==2.6.0',
     'python-dotenv==1.0.1',
+    'firebase_admin==6.5.0',
     'python-multipart'
 ]
 
@@ -38,5 +39,6 @@ packages = [
     "auth_gateway_serverkit",
     "auth_gateway_serverkit.middleware",
     "auth_gateway_serverkit.keycloak",
+    "auth_gateway_serverkit.firebase",
 ]
 package-dir = {"" = "src"}
