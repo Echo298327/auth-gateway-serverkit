@@ -7,7 +7,7 @@ from .config import settings
 from .client_api import get_admin_token
 
 
-logger = init_logger("serverkit.keycloak.manager")
+logger = init_logger("serverkit.keycloak.user")
 
 
 async def add_user_to_keycloak(user_name, first_name, last_name, email: str, password: str, role_list: list):
