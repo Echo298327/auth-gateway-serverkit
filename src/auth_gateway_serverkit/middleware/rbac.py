@@ -1,7 +1,9 @@
 from functools import wraps
-from auth_gateway_serverkit.logger import init_logger
+from ..logger import init_logger
 
 logger = init_logger("serverkit.middleware.rbac")
+
+
 def require_roles(*allowed_roles: str):
     """
     Decorator to check if the user has the required roles to access a function.
@@ -17,7 +19,7 @@ def require_roles(*allowed_roles: str):
 
     def decorator(func):
         @wraps(func)
-        async def wrapper(data, request_user=None, *args, **kwargs):
+        async def wrapper(self, data, request_user=None, *args, **kwargs):
             if not request_user:
                 logger.warning(f"Unauthorized access attempt to {func.__name__} without request_user")
                 raise Exception(f"unauthorized access")
@@ -37,7 +39,7 @@ def require_roles(*allowed_roles: str):
                 raise Exception(f"unauthorized access")
 
             # User has required role, proceed with function execution
-            return await func(data, request_user, *args, **kwargs)
+            return await func(self, data, request_user, *args, **kwargs)
 
         return wrapper
 

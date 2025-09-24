@@ -3,7 +3,7 @@ from fastapi import HTTPException, Request, status
 from typing import Callable, Any
 from functools import wraps
 from firebase_admin import auth as firebase_auth
-from auth_gateway_serverkit.logger import init_logger
+from ..logger import init_logger
 
 logger = init_logger("serverkit.middleware.fb_auth")
 
