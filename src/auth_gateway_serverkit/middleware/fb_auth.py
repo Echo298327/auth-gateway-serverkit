@@ -5,7 +5,7 @@ from functools import wraps
 from firebase_admin import auth as firebase_auth
 from auth_gateway_serverkit.logger import init_logger
 
-logger = init_logger(__name__)
+logger = init_logger("serverkit.middleware.fb_auth")
 
 
 async def verify_firebase_token(token: str) -> dict:

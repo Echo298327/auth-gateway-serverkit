@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="auth-gateway-serverkit",
-    version="0.0.76",
+    version="0.0.77",
     author="Echo298327",
     author_email="shalomber17@gmail.com",
     description="auth gateway server kit",
