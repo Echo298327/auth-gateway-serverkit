@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 
 logger = init_logger("serverkit.firebase.user")
 
-def create_user(self, email: str, password: Optional[str] = None, display_name: Optional[str] = None) -> Dict[str, Any]:
+def create_user(email: str, password: Optional[str] = None, display_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Create a user in Firebase Auth.
 
@@ -52,7 +52,7 @@ def create_user(self, email: str, password: Optional[str] = None, display_name: 
         self.logger.error(f"Failed to create Firebase user {email}: {str(e)}")
         raise Exception(f"Firebase user creation failed: {str(e)}")
 
-def delete_user(self, firebase_uid: str) -> bool:
+def delete_user(firebase_uid: str) -> bool:
     """
     Delete a user from Firebase Auth.
 
