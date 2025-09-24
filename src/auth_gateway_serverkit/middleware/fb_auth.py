@@ -2,24 +2,10 @@
 from fastapi import HTTPException, Request, status
 from typing import Callable, Any
 from functools import wraps
-import firebase_admin
 from firebase_admin import auth as firebase_auth
 from auth_gateway_serverkit.logger import init_logger
 
 logger = init_logger(__name__)
-
-
-# Initialize Firebase Admin SDK (this should be done once at startup)
-def initialize_firebase():
-    """Initialize Firebase Admin SDK if not already initialized."""
-    try:
-        if not firebase_admin._apps:
-            # Initialize Firebase with default credentials (Google Cloud CLI)
-            firebase_admin.initialize_app()
-            logger.info("Firebase Admin SDK initialized with default credentials")
-    except Exception as ex:
-        logger.error(f"Failed to initialize Firebase Admin SDK: {str(ex)}")
-        raise
 
 
 async def verify_firebase_token(token: str) -> dict:
@@ -119,11 +105,3 @@ def auth(get_user_by_uid: Callable[[str], Any]):
         return wrapper
 
     return decorator
-
-
-# Initialize Firebase when module is imported
-try:
-    initialize_firebase()
-except Exception as e:
-    logger.warning(f"Firebase initialization failed during import: {str(e)}")
-    logger.warning("Make sure to call initialize_firebase() before using Firebase auth")
