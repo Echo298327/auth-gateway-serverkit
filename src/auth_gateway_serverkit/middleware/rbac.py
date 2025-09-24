@@ -21,8 +21,8 @@ def require_roles(*allowed_roles: str):
         @wraps(func)
         async def wrapper(self, data, request_user=None, *args, **kwargs):
             if not request_user:
-                logger.warning(f"Unauthorized access attempt to {func.__name__} without request_user")
-                raise Exception(f"unauthorized access")
+                # system call, allow it
+                return await func(self, data, request_user, *args, **kwargs)
 
             user_roles = request_user.get("roles", [])
             if not user_roles:
