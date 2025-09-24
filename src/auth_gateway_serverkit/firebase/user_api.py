@@ -38,7 +38,7 @@ def create_user(email: str, password: Optional[str] = None, display_name: Option
         # Create user in Firebase
         firebase_user = firebase_auth.create_user(**user_args)
 
-        self.logger.info(f"Firebase user created: {firebase_user.uid}")
+        logger.info(f"Firebase user created: {firebase_user.uid}")
 
         return {
             'uid': firebase_user.uid,
@@ -49,7 +49,7 @@ def create_user(email: str, password: Optional[str] = None, display_name: Option
         }
 
     except Exception as e:
-        self.logger.error(f"Failed to create Firebase user {email}: {str(e)}")
+        logger.error(f"Failed to create Firebase user {email}: {str(e)}")
         raise Exception(f"Firebase user creation failed: {str(e)}")
 
 def delete_user(firebase_uid: str) -> bool:
@@ -67,10 +67,10 @@ def delete_user(firebase_uid: str) -> bool:
     """
     try:
         firebase_auth.delete_user(firebase_uid)
-        self.logger.info(f"Firebase user deleted: {firebase_uid}")
+        logger.info(f"Firebase user deleted: {firebase_uid}")
         return True
 
     except Exception as e:
-        self.logger.error(f"Failed to delete Firebase user {firebase_uid}: {str(e)}")
+        logger.error(f"Failed to delete Firebase user {firebase_uid}: {str(e)}")
         raise Exception(f"Firebase user deletion failed: {str(e)}")
 
