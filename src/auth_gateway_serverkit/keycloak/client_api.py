@@ -51,6 +51,80 @@ async def retrieve_client_token(user_name, password):
         return None
 
 
+async def refresh_client_token(refresh_token: str):
+    """
+    Refresh an access token using a Keycloak refresh token.
+
+    Args:
+        refresh_token (str): The refresh token from a previous login.
+
+    Returns:
+        httpx.Response: Response from Keycloak token endpoint, or None on error.
+    """
+    try:
+        if settings.CLIENT_SECRET:
+            client_secret = settings.CLIENT_SECRET
+        else:
+            logger.info("Fetching client secret from Keycloak")
+            client_secret = await get_client_secret()
+            settings.CLIENT_SECRET = client_secret
+            if not client_secret:
+                logger.error("Failed to get client secret")
+                return None
+
+        url = f"{settings.SERVER_URL}/realms/{settings.REALM}/protocol/openid-connect/token"
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": settings.CLIENT_ID,
+            "client_secret": client_secret,
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(url, data=payload, headers=headers)
+            return response
+    except Exception as e:
+        logger.error(f"Request error: {e}")
+        return None
+
+
+async def revoke_client_token(refresh_token: str):
+    """
+    Revoke a refresh token at Keycloak (logout). The token can no longer be used.
+
+    Args:
+        refresh_token (str): The refresh token to revoke.
+
+    Returns:
+        httpx.Response: Response from Keycloak revoke endpoint, or None on error.
+    """
+    try:
+        if settings.CLIENT_SECRET:
+            client_secret = settings.CLIENT_SECRET
+        else:
+            logger.info("Fetching client secret from Keycloak")
+            client_secret = await get_client_secret()
+            settings.CLIENT_SECRET = client_secret
+            if not client_secret:
+                logger.error("Failed to get client secret")
+                return None
+
+        url = f"{settings.SERVER_URL}/realms/{settings.REALM}/protocol/openid-connect/revoke"
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        payload = {
+            "token": refresh_token,
+            "token_type_hint": "refresh_token",
+            "client_id": settings.CLIENT_ID,
+            "client_secret": client_secret,
+        }
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(url, data=payload, headers=headers)
+            return response
+    except Exception as e:
+        logger.error(f"Request error: {e}")
+        return None
+
+
 async def get_admin_token() -> str | None:
     """
     Retrieve an admin token from Keycloak using the bootstrap admin credentials.
