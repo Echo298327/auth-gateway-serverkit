@@ -256,6 +256,11 @@ async def initialize_keycloak_server(max_retries=30, retry_delay=5, cleanup_and_
         logger.error("Failed to get admin token")
         return False
 
+    # When cleanup_and_build is False, only connect and verify; skip realm/client/config actions
+    if not cleanup_and_build:
+        logger.info("Keycloak connection verified (skip full init)")
+        return True
+
     # 3) run all the "realm & client setup" steps in order
     steps = [
         (create_realm, (),                   "create realm"),
