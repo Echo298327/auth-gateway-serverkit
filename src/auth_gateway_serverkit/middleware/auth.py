@@ -45,11 +45,13 @@ async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         key = await get_idp_public_key()
         audience = auth_settings.CLIENT_ID
+        issuer = f"{auth_settings.SERVER_URL}/realms/{auth_settings.REALM}"
         decoded_token = jwt.decode(
             token,
             key=key,
             algorithms=['RS256'],
             audience=audience,
+            issuer=issuer,
             leeway=0  # Ensure no leeway is applied
         )
         return decoded_token
@@ -57,6 +59,12 @@ async def get_payload(token: str = Depends(oauth2_scheme)) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    except jwt.InvalidIssuerError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token issuer",
             headers={"WWW-Authenticate": "Bearer"}
         )
     except jwt.InvalidAudienceError as e:
