@@ -68,7 +68,7 @@ async def _wait_for_keycloak(retry_delay):
         elapsed = round((i + 1) * tick)
 
 
-async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
+async def process_json_config(admin_token, client_uuid):
     """
     Process authorization configuration from multiple files:
     - roles.json: Contains realm_roles and policies (global/shared)
@@ -79,7 +79,6 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
 
     :param admin_token: Admin token for authentication
     :param client_uuid: Client UUID
-    :param cleanup_and_build: Whether to delete existing configuration before creating new one
     :return: True if successful, False otherwise
     """
     authorization_dir = os.path.join(os.getcwd(), "authorization")
@@ -182,88 +181,81 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
 
     logger.info(f"Combined configuration: {len(combined_config['realm_roles'])} roles, {len(combined_config['policies'])} policies, {len(combined_config['resources'])} resources, {len(consolidated_permissions)} consolidated permissions")
 
-    # Step 1: Cleanup existing configuration if requested
-    if cleanup_and_build:
-        logger.info("Starting cleanup of existing authorization configuration...")
-        cleanup_success = await cleanup_authorization_config(combined_config, admin_token, client_uuid)
-        if not cleanup_success:
-            logger.error("Failed to cleanup existing configuration")
-            return False
+    logger.info("Starting cleanup of existing authorization configuration...")
+    cleanup_success = await cleanup_authorization_config(combined_config, admin_token, client_uuid)
+    if not cleanup_success:
+        logger.error("Failed to cleanup existing configuration")
+        return False
 
-        # Step 2: Create resources and collect their IDs
-        resource_ids = {}
-        resources_to_create = combined_config.get("resources", [])
-        if resources_to_create:
-            logger.info(f"Creating {len(resources_to_create)} resources...")
-            for resource in resources_to_create:
-                success = await create_resource(
-                    resource['name'],
-                    resource['displayName'],
-                    resource['url'],
-                    admin_token,
-                    client_uuid
-                )
-                if not success:
-                    logger.error(f"Failed to create resource: {resource['name']}")
-                    return False
+    resource_ids = {}
+    resources_to_create = combined_config.get("resources", [])
+    if resources_to_create:
+        logger.info(f"Creating {len(resources_to_create)} resources...")
+        for resource in resources_to_create:
+            success = await create_resource(
+                resource['name'],
+                resource['displayName'],
+                resource['url'],
+                admin_token,
+                client_uuid
+            )
+            if not success:
+                logger.error(f"Failed to create resource: {resource['name']}")
+                return False
 
-                # Retrieve resource ID from Keycloak
-                resource_id = await get_resource_id(resource['name'], admin_token, client_uuid)
-                if resource_id:
-                    resource_ids[resource['name']] = resource_id
-                else:
-                    logger.error(f"Failed to retrieve resource ID for: {resource['name']}")
-                    return False
-            logger.info("All resources created successfully")
+            resource_id = await get_resource_id(resource['name'], admin_token, client_uuid)
+            if resource_id:
+                resource_ids[resource['name']] = resource_id
+            else:
+                logger.error(f"Failed to retrieve resource ID for: {resource['name']}")
+                return False
+        logger.info("All resources created successfully")
 
-        # Step 3: Create policies
-        policies_to_create = combined_config.get("policies", [])
-        if policies_to_create:
-            logger.info(f"Creating {len(policies_to_create)} policies...")
-            for policy in policies_to_create:
-                success = await create_policy(
-                    policy['name'],
-                    policy['description'],
-                    policy['roles'],
-                    admin_token,
-                    client_uuid
-                )
-                if not success:
-                    logger.error(f"Failed to create policy: {policy['name']}")
-                    return False
-            logger.info("All policies created successfully")
+    policies_to_create = combined_config.get("policies", [])
+    if policies_to_create:
+        logger.info(f"Creating {len(policies_to_create)} policies...")
+        for policy in policies_to_create:
+            success = await create_policy(
+                policy['name'],
+                policy['description'],
+                policy['roles'],
+                admin_token,
+                client_uuid
+            )
+            if not success:
+                logger.error(f"Failed to create policy: {policy['name']}")
+                return False
+        logger.info("All policies created successfully")
 
-        # Step 4: Create consolidated permissions (one per resource with combined policies)
-        permissions_to_create = combined_config.get("permissions", [])
-        if permissions_to_create:
-            logger.info(f"Creating {len(permissions_to_create)} consolidated permissions...")
-            for permission in permissions_to_create:
-                resource_names = permission.get('resources', [])
-                if not resource_names:
-                    logger.error(f"No resources specified for permission '{permission['name']}'")
-                    return False
+    permissions_to_create = combined_config.get("permissions", [])
+    if permissions_to_create:
+        logger.info(f"Creating {len(permissions_to_create)} consolidated permissions...")
+        for permission in permissions_to_create:
+            resource_names = permission.get('resources', [])
+            if not resource_names:
+                logger.error(f"No resources specified for permission '{permission['name']}'")
+                return False
 
-                # Get resource IDs for all associated resources (should be only one per permission now)
-                resource_ids_list = [resource_ids.get(name) for name in resource_names]
-                if None in resource_ids_list:
-                    missing_resources = [name for name, rid in zip(resource_names, resource_ids_list) if rid is None]
-                    logger.error(f"Missing resource IDs for: {missing_resources}")
-                    return False
+            resource_ids_list = [resource_ids.get(name) for name in resource_names]
+            if None in resource_ids_list:
+                missing_resources = [name for name, rid in zip(resource_names, resource_ids_list) if rid is None]
+                logger.error(f"Missing resource IDs for: {missing_resources}")
+                return False
 
-                success = await create_permission(
-                    permission['name'],
-                    permission['description'],
-                    permission['policies'],  # Combined policies for OR-based logic
-                    resource_ids_list,
-                    admin_token,
-                    client_uuid
-                )
-                if not success:
-                    logger.error(f"Failed to create permission: {permission['name']}")
-                    return False
-            logger.info("All consolidated permissions created successfully")
+            success = await create_permission(
+                permission['name'],
+                permission['description'],
+                permission['policies'],
+                resource_ids_list,
+                admin_token,
+                client_uuid
+            )
+            if not success:
+                logger.error(f"Failed to create permission: {permission['name']}")
+                return False
+        logger.info("All consolidated permissions created successfully")
 
-    logger.info("Authorization configuration processed successfully with proper OR-based permission logic")
+    logger.info("Authorization configuration processed successfully")
     return True
 
 
@@ -294,6 +286,10 @@ async def initialize_keycloak_server(retry_delay=5, cleanup_and_build=True):
         logger.error("Failed to get admin token")
         return False
 
+    if not cleanup_and_build:
+        logger.info("Skipping initialization (cleanup_and_build=False)")
+        return True
+
     # 3) run all the "realm & client setup" steps in order
     steps = [
         (create_realm, (),                   "create realm"),
@@ -318,7 +314,7 @@ async def initialize_keycloak_server(retry_delay=5, cleanup_and_build=True):
     # 5) remove scopes and process JSON config
     post_steps = [
         (remove_default_scopes,    (client_uuid,), "remove unwanted default/optional scopes"),
-        (process_json_config,      (client_uuid, cleanup_and_build), "process JSON configuration"),
+        (process_json_config,      (client_uuid,), "process JSON configuration"),
     ]
     for func, args, desc in post_steps:
         ok = await func(admin_token, *args)
