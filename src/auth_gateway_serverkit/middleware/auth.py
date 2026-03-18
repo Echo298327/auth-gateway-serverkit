@@ -5,7 +5,7 @@ from functools import wraps
 from fastapi.security import OAuth2PasswordBearer
 from keycloak import KeycloakOpenID
 from .config import settings as auth_settings
-from ..keycloak.client_api import get_client_secret
+from ..keycloak.client import get_client_secret
 from .schemas import UserPayload
 import requests
 import jwt
@@ -13,7 +13,7 @@ from ..logger import init_logger
 
 # Set up OAuth2 (the tokenUrl can be set later when settings are initialized)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='None')
-logger = init_logger("serverkit.middleware.auth")
+logger = init_logger(__name__)
 
 
 def get_keycloak_openid():

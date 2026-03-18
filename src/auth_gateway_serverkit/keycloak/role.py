@@ -1,10 +1,13 @@
-"""Keycloak roles API module for managing roles in Keycloak"""
+"""Keycloak Role Module for the auth gateway serverkit."""
+import os
+import json
 import httpx
+import aiohttp
 from .config import settings
 from ..logger import init_logger
-from .client_api import get_admin_token
+from .client import get_admin_token
 
-logger = init_logger("serverkit.keycloak.roles")
+logger = init_logger(__name__)
 
 
 async def get_all_roles() -> dict:
@@ -83,3 +86,86 @@ async def get_role_management_permissions(role_id: str) -> dict:
     except Exception as e:
         logger.error(f"Exception fetching management permissions from Keycloak: {e}")
         return {'status': 'error', 'message': "Exception occurred while fetching management permissions from Keycloak"}
+
+
+async def get_role_ids_by_names(role_names, admin_token) -> list:
+    """
+    Get role IDs by role names from Keycloak.
+    :param role_names: List of role names
+    :param admin_token: Admin token for authentication
+    :return: List of role IDs
+    """
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    role_ids = []
+    for role_name in role_names:
+        url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles/{role_name}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        role_data = await response.json()
+                        role_ids.append(role_data['id'])
+                    else:
+                        logger.error(f"Failed to get role ID for '{role_name}'. Status: {response.status}")
+                        return []
+        except aiohttp.ClientError as e:
+            logger.error(f"Connection error while getting role ID for '{role_name}': {e}")
+            return []
+    
+    return role_ids
+
+
+async def create_realm_roles(admin_token) -> bool:
+    """
+    Create realm roles in Keycloak based on the authorization configuration.
+    :param admin_token:
+    :return: True if successful, False otherwise
+    """
+    authorization_dir = os.path.join(os.getcwd(), "authorization")
+    roles_file = os.path.join(authorization_dir, "roles.json")
+    
+    if not os.path.exists(roles_file):
+        logger.error("roles.json file not found in authorization directory")
+        return False
+
+    with open(roles_file, 'r') as file:
+        config = json.load(file)
+
+    roles_to_create = config.get("realm_roles", [])
+    if not roles_to_create:
+        logger.warning("No realm roles defined in the configuration")
+        return True
+
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+
+    success = True
+    for role in roles_to_create:
+        url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles"
+        payload = {
+            'name': role['name'],
+            'description': role.get('description', ''),
+            'composite': False,
+            'clientRole': False
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    if response.status == 201:
+                        logger.info(f"Role '{role['name']}' created successfully in realm '{settings.REALM}'")
+                    elif response.status == 409:
+                        pass
+                    else:
+                        logger.error(f"Failed to create role '{role['name']}'. Status: {response.status}, Response: {await response.text()}")
+                        success = False
+        except aiohttp.ClientError as e:
+            logger.error(f"Connection error while creating role '{role['name']}': {e}")
+            success = False
+
+    return success

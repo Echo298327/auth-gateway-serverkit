@@ -3,7 +3,7 @@ import httpx
 from typing import Optional, Dict
 from .logger import init_logger
 
-logger = init_logger("utils.requests")
+logger = init_logger(__name__)
 
 
 async def post(

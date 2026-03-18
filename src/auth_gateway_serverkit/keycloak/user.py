@@ -1,13 +1,13 @@
-""" Keycloak user API Module for the auth gateway serverkit."""
+""" Keycloak User Module for the auth gateway serverkit."""
 import httpx
 import json
 import aiohttp
 from ..logger import init_logger
 from .config import settings
-from .client_api import get_admin_token
+from .client import get_admin_token
 
 
-logger = init_logger("serverkit.keycloak.user")
+logger = init_logger(__name__)
 
 
 async def add_user_to_keycloak(user_name, first_name, last_name, email: str, password: str, role_list: list):
@@ -20,7 +20,6 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
             "Authorization": f"Bearer {token}"
         }
 
-        # Step 1: Create the User
         body = {
             "username": user_name,
             "firstName": first_name,
@@ -37,7 +36,6 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
                 location_header = response.headers.get('Location')
                 user_uuid = location_header.rstrip('/').split('/')[-1]
 
-                # Step 2: Assign Specified Roles to the New User
                 roles_to_assign = []
                 for role_name in role_list:
                     logger.info(f"Assigning role '{role_name}' to user '{user_name}'")
@@ -56,7 +54,6 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
                         logger.error(f"Error retrieving role '{role_name}': {role_response.text}")
                         return {'status': 'error', 'message': f"Error retrieving role '{role_name}' from Keycloak", "keycloakUserId": user_uuid}
 
-                # Assign the roles to the user
                 role_mapping_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_uuid}/role-mappings/realm"
                 assign_role_response = await client.post(
                     role_mapping_url,
@@ -65,7 +62,6 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
                 )
 
                 if assign_role_response.status_code == 204:
-                    # Role assignment successful
                     return {'status': 'success', 'keycloakUserId': user_uuid}
                 else:
                     logger.error(f"Error assigning roles to user: {assign_role_response.text}")
@@ -99,7 +95,6 @@ async def update_user_in_keycloak(
         }
 
         async with httpx.AsyncClient(timeout=20) as client:
-            # Step 1: Update Basic User Info
             body = {
                 "username": user_name,
                 "firstName": first_name,
@@ -112,9 +107,7 @@ async def update_user_in_keycloak(
                 logger.error(f"Error updating user in Keycloak: {response.text}")
                 return {'status': 'error', 'message': "Error updating user in Keycloak"}
 
-            # Step 2: Update User Roles (if roles provided)
             if roles is not None and len(roles) > 0:
-                # Retrieve current roles assigned to the user
                 current_roles_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/role-mappings/realm"
                 current_roles_response = await client.get(current_roles_url, headers=headers)
                 if current_roles_response.status_code != 200:
@@ -124,11 +117,9 @@ async def update_user_in_keycloak(
                 current_roles = current_roles_response.json()
                 current_role_names = {role["name"] for role in current_roles}
 
-                # Determine roles to add and remove
                 roles_to_add = set(roles) - current_role_names
                 roles_to_remove = current_role_names - set(roles)
 
-                # Add new roles
                 roles_to_add_details = []
                 for role_name in roles_to_add:
                     role_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/roles/{role_name}"
@@ -150,7 +141,6 @@ async def update_user_in_keycloak(
                         logger.error(f"Error assigning roles: {assign_response.text}")
                         return {'status': 'error', 'message': "Error assigning roles in Keycloak"}
 
-                # Remove roles no longer assigned
                 roles_to_remove_details = [
                     role for role in current_roles if role["name"] in roles_to_remove
                 ]
@@ -170,7 +160,6 @@ async def update_user_in_keycloak(
                     user_needs_logout = True
 
             if password:
-                # Step 3: Update User Password
                 user_needs_logout = True
 
                 password_body = {
@@ -243,15 +232,12 @@ async def execute_actions_email(
         "Content-Type": "application/json"
     }
 
-    # Construct the URL for the execute actions endpoint
     url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users/{user_id}/execute-actions-email"
 
-    # Build query parameters
     params = {
         "lifespan": lifespan
     }
 
-    # You can append redirectUri and clientId if they are needed
     if redirect_uri:
         params["redirectUri"] = redirect_uri
     if settings.CLIENT_ID:

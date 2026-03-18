@@ -1,7 +1,7 @@
 from functools import wraps
 from ..logger import init_logger
 
-logger = init_logger("serverkit.middleware.rbac")
+logger = init_logger(__name__)
 
 
 def require_roles(*allowed_roles: str):
