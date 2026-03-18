@@ -45,10 +45,13 @@ async def check_keycloak_connection(quiet=False):
         return False
 
 
+_IS_TTY = sys.stdout.isatty()
 SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 
 def _print_connection_spinner(frame, elapsed):
+    if not _IS_TTY:
+        return
     spinner = SPINNER_CHARS[frame % len(SPINNER_CHARS)]
     sys.stdout.write(
         f"\r{YELLOW}  {spinner}  Waiting for Keycloak  {RESET}"
@@ -59,13 +62,17 @@ def _print_connection_spinner(frame, elapsed):
 
 async def _wait_for_keycloak(retry_delay):
     """Animate spinner while sleeping between retries."""
-    tick = 0.15
-    steps = int(retry_delay / tick)
-    elapsed = 0
-    for i in range(steps):
-        _print_connection_spinner(i, elapsed)
-        await asyncio.sleep(tick)
-        elapsed = round((i + 1) * tick)
+    if _IS_TTY:
+        tick = 0.15
+        steps = int(retry_delay / tick)
+        elapsed = 0
+        for i in range(steps):
+            _print_connection_spinner(i, elapsed)
+            await asyncio.sleep(tick)
+            elapsed = round((i + 1) * tick)
+    else:
+        logger.info(f"Waiting for Keycloak ({retry_delay}s)...")
+        await asyncio.sleep(retry_delay)
 
 
 async def process_json_config(admin_token, client_uuid):
@@ -271,11 +278,14 @@ async def initialize_keycloak_server(retry_delay=5, cleanup_and_build=True):
     total_elapsed = 0
     while True:
         if await check_keycloak_connection(quiet=True):
-            sys.stdout.write(
-                f"\r{GREEN}  ✓  Connected to Keycloak  {RESET}"
-                f"{DIM}({total_elapsed}s){RESET}              \n"
-            )
-            sys.stdout.flush()
+            if _IS_TTY:
+                sys.stdout.write(
+                    f"\r{GREEN}  ✓  Connected to Keycloak  {RESET}"
+                    f"{DIM}({total_elapsed}s){RESET}              \n"
+                )
+                sys.stdout.flush()
+            else:
+                logger.info(f"Connected to Keycloak ({total_elapsed}s)")
             break
         await _wait_for_keycloak(retry_delay)
         total_elapsed += retry_delay
