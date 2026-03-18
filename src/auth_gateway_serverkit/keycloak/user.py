@@ -10,7 +10,7 @@ from .client import get_admin_token
 logger = init_logger(__name__)
 
 
-async def add_user_to_keycloak(user_name, first_name, last_name, email: str, password: str, role_list: list):
+async def add_user_to_keycloak(user_name, first_name, last_name, email: str, password: str, role_list: list, required_actions: list = None):
     try:
         token = await get_admin_token()
         if not token:
@@ -29,6 +29,8 @@ async def add_user_to_keycloak(user_name, first_name, last_name, email: str, pas
             "email": email,
             "credentials": [{"type": "password", "value": password, "temporary": False}]
         }
+        if required_actions:
+            body["requiredActions"] = required_actions
         url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/users"
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(url, json=body, headers=headers)
