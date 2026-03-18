@@ -1,35 +1,71 @@
 """Keycloak server initialization module for the auth gateway serverkit."""
 import os
+import sys
 import json
 import asyncio
 import aiohttp
 from ..logger import init_logger
 from .config import settings
-from .client_api import (
-    get_admin_token, get_client_uuid, create_realm, set_frontend_url, create_client, create_realm_roles,
-    add_audience_protocol_mapper, enable_edit_username, remove_default_scopes, create_resource,
-    create_policy, create_permission, get_resource_id
+from .client import (
+    get_admin_token, get_client_uuid, create_client,
+    add_audience_protocol_mapper, remove_default_scopes,
 )
-from .cleanup_api import cleanup_authorization_config
+from .realm import create_realm, set_frontend_url, enable_edit_username
+from .role import create_realm_roles
+from .authorization import (
+    create_resource, create_policy, create_permission,
+    get_resource_id, cleanup_authorization_config,
+)
 from .utils import create_dynamic_permission_name
 
 
-logger = init_logger("serverkit.keycloak.initializer")
+logger = init_logger(__name__)
 
 
-async def check_keycloak_connection():
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+DIM = "\033[2m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
+
+async def check_keycloak_connection(quiet=False):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(settings.SERVER_URL) as response:
                 if response.status == 200:
-                    logger.info("Successfully connected to Keycloak server")
                     return True
                 else:
-                    logger.error(f"Failed to connect to Keycloak server. Status: {response.status}")
+                    if not quiet:
+                        logger.error(f"Failed to connect to Keycloak server. Status: {response.status}")
                     return False
-    except aiohttp.ClientError as e:
-        logger.error(f"Failed to connect to Keycloak server: {e}")
+    except aiohttp.ClientError:
         return False
+
+
+SPINNER_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def _print_connection_spinner(frame, elapsed):
+    spinner = SPINNER_CHARS[frame % len(SPINNER_CHARS)]
+    sys.stdout.write(
+        f"\r{YELLOW}  {spinner}  Waiting for Keycloak  {RESET}"
+        f"{DIM}({elapsed}s elapsed){RESET}   "
+    )
+    sys.stdout.flush()
+
+
+async def _wait_for_keycloak(retry_delay):
+    """Animate spinner while sleeping between retries."""
+    tick = 0.15
+    steps = int(retry_delay / tick)
+    elapsed = 0
+    for i in range(steps):
+        _print_connection_spinner(i, elapsed)
+        await asyncio.sleep(tick)
+        elapsed = round((i + 1) * tick)
 
 
 async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
@@ -231,35 +267,32 @@ async def process_json_config(admin_token, client_uuid, cleanup_and_build=True):
     return True
 
 
-async def initialize_keycloak_server(max_retries=30, retry_delay=5, cleanup_and_build=True):
+async def initialize_keycloak_server(retry_delay=5, cleanup_and_build=True):
     """
     Initialize Keycloak server with realm, client, and authorization configuration.
 
-    :param max_retries: Maximum number of connection retry attempts
     :param retry_delay: Delay between retry attempts in seconds
     :param cleanup_and_build: Whether to delete existing authorization config before creating new one
     :return: True if successful, False otherwise
     """
     # 1) wait until Keycloak is up
-    for attempt in range(1, max_retries + 1):
-        if await check_keycloak_connection():
+    total_elapsed = 0
+    while True:
+        if await check_keycloak_connection(quiet=True):
+            sys.stdout.write(
+                f"\r{GREEN}  ✓  Connected to Keycloak  {RESET}"
+                f"{DIM}({total_elapsed}s){RESET}              \n"
+            )
+            sys.stdout.flush()
             break
-        logger.warning(f"Attempt {attempt}/{max_retries} failed. Retrying in {retry_delay}s")
-        await asyncio.sleep(retry_delay)
-    else:
-        logger.error("Failed to initialize Keycloak after multiple attempts")
-        return False
+        await _wait_for_keycloak(retry_delay)
+        total_elapsed += retry_delay
 
     # 2) get admin token
     admin_token = await get_admin_token()
     if not admin_token:
         logger.error("Failed to get admin token")
         return False
-
-    # When cleanup_and_build is False, only connect and verify; skip realm/client/config actions
-    if not cleanup_and_build:
-        logger.info("Keycloak connection verified (skip full init)")
-        return True
 
     # 3) run all the "realm & client setup" steps in order
     steps = [

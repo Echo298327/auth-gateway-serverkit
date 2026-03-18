@@ -1,10 +1,154 @@
-"""Keycloak Cleanup API Module for the auth gateway serverkit."""
+"""Keycloak Authorization Module for the auth gateway serverkit."""
 import aiohttp
 from .config import settings
 from ..logger import init_logger
-from .client_api import get_resource_id
+from .role import get_role_ids_by_names
 
-logger = init_logger("serverkit.keycloak.cleanup")
+logger = init_logger(__name__)
+
+
+async def get_resource_id(resource_name, admin_token, client_uuid) -> str | None:
+    """
+    Retrieve the resource ID for a given resource name.
+    :param resource_name:
+    :param admin_token:
+    :param client_uuid:
+    :return: Resource ID if found, None otherwise
+    """
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/authz/resource-server/resource"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    resources = await response.json()
+                    for resource in resources:
+                        if resource['name'] == resource_name:
+                            return resource['_id']
+                else:
+                    logger.error(f"Failed to fetch resources. Status: {response.status}, Response: {await response.text()}")
+    except aiohttp.ClientError as e:
+        logger.error(f"Connection error while retrieving resource ID for '{resource_name}': {e}")
+    return None
+
+
+async def create_resource(resource_name, display_name, url, admin_token, client_uuid) -> bool:
+    """
+    Create a new resource in Keycloak.
+    :param resource_name:
+    :param display_name:
+    :param url:
+    :param admin_token:
+    :param client_uuid:
+    :return: True if successful, False otherwise
+    """
+
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+    resource_url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/authz/resource-server/resource"
+    payload = {
+        "owner": None,
+        "name": resource_name,
+        "displayName": display_name,
+        "uri": url,
+        "type": "REST API",
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(resource_url, headers=headers, json=payload) as response:
+                if response.status == 201 or response.status == 409:
+                    return True
+                else:
+                    logger.error(f"Failed to create resource '{resource_name}'. Status: {response.status}, Response: {await response.text()}")
+                    return False
+    except aiohttp.ClientError as e:
+        logger.error(f"Connection error while creating resource '{resource_name}': {e}")
+        return False
+
+
+async def create_policy(policy_name, description, roles, admin_token, client_uuid) -> bool:
+    """
+    Create a new policy in Keycloak.
+    :param policy_name:
+    :param description:
+    :param roles: List of role names
+    :param admin_token:
+    :param client_uuid:
+    :return: True if successful, False otherwise
+    """
+    
+    role_ids = await get_role_ids_by_names(roles, admin_token)
+    if not role_ids:
+        logger.error(f"Failed to get role IDs for policy '{policy_name}'")
+        return False
+
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/authz/resource-server/policy/role"
+    payload = {
+        "name": policy_name,
+        "description": description,
+        "logic": "POSITIVE",
+        "roles": [{"id": role_id} for role_id in role_ids]
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                if response.status == 201 or response.status == 409:
+                    return True
+                else:
+                    logger.error(f"Failed to create policy '{policy_name}'. Status: {response.status}, Response: {await response.text()}")
+                    return False
+    except aiohttp.ClientError as e:
+        logger.error(f"Connection error while creating policy '{policy_name}': {e}")
+        return False
+
+
+async def create_permission(permission_name, description, policies, resource_ids, admin_token, client_uuid) -> bool:
+    """
+    Create a new permission in Keycloak with Affirmative decision strategy for OR-based logic.
+    This ensures that access is granted if ANY of the associated policies evaluate to PERMIT.
+    
+    :param permission_name: Name of the permission
+    :param description: Description of the permission
+    :param policies: List of policy names to associate with this permission
+    :param resource_ids: List of resource IDs this permission applies to
+    :param admin_token: Admin token for authentication
+    :param client_uuid: Client UUID
+    :return: True if successful, False otherwise
+    """
+
+    headers = {
+        'Authorization': f'Bearer {admin_token}',
+        'Content-Type': 'application/json'
+    }
+    url = f"{settings.SERVER_URL}/admin/realms/{settings.REALM}/clients/{client_uuid}/authz/resource-server/permission/resource"
+    payload = {
+        "name": permission_name,
+        "description": description,
+        "type": "resource",
+        "resources": resource_ids,
+        "policies": policies,
+        "decisionStrategy": "AFFIRMATIVE"
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                if response.status == 201 or response.status == 409:
+                    return True
+                else:
+                    logger.error(f"Failed to create permission '{permission_name}'. Status: {response.status}, Response: {await response.text()}")
+                    return False
+    except aiohttp.ClientError as e:
+        logger.error(f"Connection error while creating permission '{permission_name}': {e}")
+        return False
 
 
 async def get_policy_id(policy_name, admin_token, client_uuid) -> str | None:
@@ -67,10 +211,9 @@ async def delete_resource(resource_name, admin_token, client_uuid) -> bool:
     :param client_uuid:
     :return: True if successful or not found, False on error
     """
-    # First get the resource ID
     resource_id = await get_resource_id(resource_name, admin_token, client_uuid)
     if not resource_id:
-        return True  # Resource doesn't exist, consider it successful
+        return True
     
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -81,7 +224,7 @@ async def delete_resource(resource_name, admin_token, client_uuid) -> bool:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.delete(url, headers=headers) as response:
-                return response.status in [204, 404]  # Success or not found
+                return response.status in [204, 404]
     except aiohttp.ClientError:
         return False
 
@@ -94,10 +237,9 @@ async def delete_policy(policy_name, admin_token, client_uuid) -> bool:
     :param client_uuid:
     :return: True if successful or not found, False on error
     """
-    # First get the policy ID
     policy_id = await get_policy_id(policy_name, admin_token, client_uuid)
     if not policy_id:
-        return True  # Policy doesn't exist, consider it successful
+        return True
     
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -108,7 +250,7 @@ async def delete_policy(policy_name, admin_token, client_uuid) -> bool:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.delete(url, headers=headers) as response:
-                return response.status in [204, 404]  # Success or not found
+                return response.status in [204, 404]
     except aiohttp.ClientError:
         return False
 
@@ -121,10 +263,9 @@ async def delete_permission(permission_name, admin_token, client_uuid) -> bool:
     :param client_uuid:
     :return: True if successful or not found, False on error
     """
-    # First get the permission ID
     permission_id = await get_permission_id(permission_name, admin_token, client_uuid)
     if not permission_id:
-        return True  # Permission doesn't exist, consider it successful
+        return True
     
     headers = {
         'Authorization': f'Bearer {admin_token}',
@@ -135,7 +276,7 @@ async def delete_permission(permission_name, admin_token, client_uuid) -> bool:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.delete(url, headers=headers) as response:
-                return response.status in [204, 404]  # Success or not found
+                return response.status in [204, 404]
     except aiohttp.ClientError:
         return False
 
@@ -219,7 +360,6 @@ async def cleanup_authorization_config(config, admin_token, client_uuid) -> bool
     :return: True if cleanup successful, False otherwise
     """
     
-    # Step 1: Get and delete ALL existing permissions (dependencies first)
     existing_permissions = await get_all_permissions(admin_token, client_uuid)
     if existing_permissions:
         logger.info(f"Deleting {len(existing_permissions)} existing permissions...")
@@ -237,7 +377,6 @@ async def cleanup_authorization_config(config, admin_token, client_uuid) -> bool
     else:
         logger.info("No existing permissions to delete")
 
-    # Step 2: Get and delete ALL existing policies
     existing_policies = await get_all_policies(admin_token, client_uuid)
     if existing_policies:
         logger.info(f"Deleting {len(existing_policies)} existing policies...")
@@ -255,7 +394,6 @@ async def cleanup_authorization_config(config, admin_token, client_uuid) -> bool
     else:
         logger.info("No existing policies to delete")
 
-    # Step 3: Get and delete ALL existing resources
     existing_resources = await get_all_resources(admin_token, client_uuid)
     if existing_resources:
         logger.info(f"Deleting {len(existing_resources)} existing resources...")
