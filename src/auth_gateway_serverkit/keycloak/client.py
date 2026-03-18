@@ -7,13 +7,14 @@ from ..logger import init_logger
 logger = init_logger(__name__)
 
 
-async def retrieve_client_token(user_name, password):
+async def retrieve_client_token(user_name, password, totp=None):
     """
     Retrieve a token from Keycloak using the Resource Owner Password Credentials Grant.
 
     Args:
         user_name (str): The username of the user.
         password (str): The password of the user.
+        totp (str, optional): TOTP code for users with OTP configured.
 
     Returns:
         dict: A dictionary containing the access token and other token details.
@@ -41,6 +42,8 @@ async def retrieve_client_token(user_name, password):
             "client_id": settings.CLIENT_ID,
             "client_secret": client_secret,
         }
+        if totp:
+            payload["totp"] = totp
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(url, data=payload, headers=headers)
             return response
