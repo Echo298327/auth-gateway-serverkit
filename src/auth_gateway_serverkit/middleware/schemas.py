@@ -17,3 +17,4 @@ class UserPayload(BaseModel):
     # first_name: str
     # last_name: str
     realm_roles: list
+    organizations: list = []

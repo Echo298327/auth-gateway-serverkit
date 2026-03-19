@@ -16,6 +16,7 @@ from .authorization import (
     create_resource, create_policy, create_permission,
     get_resource_id, cleanup_authorization_config,
 )
+from .organization import assign_organization_scope_to_client, configure_organization_attributes
 from .utils import create_dynamic_permission_name
 
 
@@ -321,10 +322,12 @@ async def initialize_keycloak_server(retry_delay=5, cleanup_and_build=True):
         logger.error("Failed to get client UUID")
         return False
 
-    # 5) remove scopes and process JSON config
+    # 5) remove scopes, setup org scope, and process JSON config
     post_steps = [
-        (remove_default_scopes,    (client_uuid,), "remove unwanted default/optional scopes"),
-        (process_json_config,      (client_uuid,), "process JSON configuration"),
+        (remove_default_scopes,             (client_uuid,), "remove unwanted default/optional scopes"),
+        (assign_organization_scope_to_client, (),            "assign organization scope to client"),
+        (configure_organization_attributes,  (),             "configure organization token attributes"),
+        (process_json_config,               (client_uuid,), "process JSON configuration"),
     ]
     for func, args, desc in post_steps:
         ok = await func(admin_token, *args)

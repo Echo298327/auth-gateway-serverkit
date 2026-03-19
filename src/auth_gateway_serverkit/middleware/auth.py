@@ -90,9 +90,11 @@ async def get_user_info(token: str = Depends(oauth2_scheme)) -> UserPayload:
     """
     try:
         payload = await get_payload(token)
+        org_claim = payload.get("organization", {})
         return UserPayload(
             id=payload.get("sub"),
             realm_roles=payload.get("realm_access", {}).get("roles", []),
+            organizations=list(org_claim.keys()) if isinstance(org_claim, dict) else [],
         )
     except Exception as e:
         raise HTTPException(
